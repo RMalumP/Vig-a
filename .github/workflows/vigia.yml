@@ -3,7 +3,7 @@ name: Vigía
 on:
   schedule:
     # Cada 15 minutos (GitHub puede retrasarlo unos minutos en horas de mucha carga)
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
