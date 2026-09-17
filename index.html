@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vigía · monitor de cambios web</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛰️</text></svg>">
+<title>Vigía · monitor de novedades web</title>
+<link rel="icon" id="favicon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛰️</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -15,6 +15,7 @@
   --ok:#2B7A50; --err:#B83232; --err-soft:#FBE7E7;
   --font:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --display:"IBM Plex Sans Condensed", "IBM Plex Sans", "Arial Narrow", system-ui, sans-serif;
+  --mono:ui-monospace, Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark){
   :root{
@@ -30,16 +31,22 @@ header{margin-bottom:28px}
 h1{font-family:var(--display);font-weight:700;font-size:clamp(2.6rem,7vw,4rem);line-height:1;margin:0 0 10px;letter-spacing:-.01em}
 header p{margin:0;color:var(--muted);max-width:60ch}
 h2{font-family:var(--display);font-weight:600;font-size:1.35rem;margin:0 0 14px}
-section{margin-top:32px}
+h3{font-size:1rem;margin:18px 0 6px}
+section{margin-top:36px}
+code{font-family:var(--mono);font-size:.86em;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:1px 5px;word-break:break-all}
+a{color:var(--changed)}
 
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
-form .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.row > div{min-width:0}
 label{display:block;font-size:.85rem;font-weight:500;color:var(--muted);margin-bottom:4px}
 .grow{flex:1 1 320px}
 input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;width:100%}
-input:focus-visible,select:focus-visible,button:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
+textarea{font:13px/1.4 var(--mono);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;resize:vertical}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
 button{font:inherit;font-weight:600;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:10px 16px}
 button:hover{border-color:var(--muted)}
+button:disabled{opacity:.55;cursor:wait}
 button.primary{background:var(--ink);color:var(--panel);border-color:var(--ink)}
 button.small{padding:6px 10px;font-size:.85rem;font-weight:500}
 button.danger{color:var(--err)}
@@ -48,17 +55,19 @@ details{margin-top:14px}
 summary{cursor:pointer;color:var(--muted);font-size:.9rem}
 details .row{margin-top:12px}
 .hint{font-size:.82rem;color:var(--muted);margin:6px 0 0}
-textarea{font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;resize:vertical}
-label.check{display:flex;gap:8px;align-items:center;color:var(--ink);font-size:.9rem;margin-top:10px;cursor:pointer}
+.ok-txt{color:var(--ok)} .err-txt{color:var(--err)}
+label.check{display:flex;gap:8px;align-items:center;color:var(--ink);font-size:.92rem;margin-top:10px;cursor:pointer;font-weight:400}
 label.check input{width:auto;accent-color:var(--signal)}
-dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);padding:22px;width:min(520px,calc(100vw - 32px))}
+.toggles{display:flex;gap:6px 20px;flex-wrap:wrap;margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sub{border-top:1px solid var(--line);margin-top:18px;padding-top:4px}
+.sub:first-child{border-top:0;margin-top:0}
+.time{width:auto}
+
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);padding:22px;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 40px)}
 dialog::backdrop{background:rgba(10,20,30,.45)}
 dialog label{margin-top:12px}
-.toast .ignore{margin-top:10px;margin-left:6px}
-.toast mark{background:var(--signal-soft);color:inherit;border-radius:3px}
-.toggles{display:flex;gap:20px;flex-wrap:wrap;margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
-.toggles label{display:flex;gap:8px;align-items:center;color:var(--ink);font-size:.95rem;margin:0;cursor:pointer}
-.toggles input{width:auto;accent-color:var(--signal)}
+dialog h2{margin-bottom:4px}
 
 /* Monitores */
 .empty{color:var(--muted);border:1px dashed var(--line);border-radius:14px;padding:28px;text-align:center}
@@ -73,14 +82,20 @@ dialog label{margin-top:12px}
 .ring .bar{stroke:var(--signal);transition:stroke-dashoffset 1s linear}
 .mon[data-status="checking"] .ring svg{animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(270deg)}}
-.ring span{position:absolute;inset:0;display:grid;place-items:center;font-size:.8rem;font-weight:600;font-variant-numeric:tabular-nums}
+.ring span{position:absolute;inset:0;display:grid;place-items:center;font-size:.78rem;font-weight:600;font-variant-numeric:tabular-nums;text-align:center;line-height:1.1}
 .mon .url{font-weight:600;word-break:break-all;color:var(--ink);text-decoration:none}
 .mon .url:hover{text-decoration:underline}
 .meta{font-size:.85rem;color:var(--muted);margin:2px 0 8px}
-.msg{font-size:.9rem;margin:0 0 10px}
+.msg{font-size:.9rem;margin:0 0 10px;word-break:break-word}
 .msg.err{color:var(--err)}
-.badge{display:inline-block;font-size:.78rem;font-weight:600;padding:2px 8px;border-radius:99px;margin-left:6px;vertical-align:2px;background:var(--changed-soft);color:var(--changed)}
-.actions{display:flex;gap:8px;flex-wrap:wrap}
+.badge{display:inline-block;font-size:.76rem;font-weight:600;padding:2px 8px;border-radius:99px;margin-left:6px;vertical-align:2px;background:var(--changed-soft);color:var(--changed)}
+.badge.cloud{background:var(--signal-soft);color:var(--ink)}
+.feedtip{font-size:.88rem;background:var(--changed-soft);border-radius:8px;padding:8px 10px;margin:0 0 10px}
+.feedtip button{margin-left:6px}
+.numero{display:flex;align-items:center;gap:14px;margin:0 0 10px;flex-wrap:wrap}
+.numero b{font-family:var(--display);font-size:1.7rem;line-height:1;font-variant-numeric:tabular-nums}
+.numero svg{overflow:visible}
+.numero .spark{stroke:var(--changed);fill:none;stroke-width:2}
 
 /* Historial */
 .log{list-style:none;margin:0;padding:0;font-size:.9rem}
@@ -89,8 +104,13 @@ dialog label{margin-top:12px}
 .log time{color:var(--muted);font-variant-numeric:tabular-nums;flex:0 0 auto}
 .log .k-changed{color:var(--changed);font-weight:600}
 .log .k-error{color:var(--err)}
+.log span{min-width:0;word-break:break-word}
+.hist-item{border-top:1px solid var(--line);padding:10px 0}
+.hist-item ul{margin:4px 0 0;padding-left:18px;font-size:.88rem}
 .notes{font-size:.9rem;color:var(--muted)}
 .notes p{margin:0 0 10px;max-width:70ch}
+ol.steps{padding-left:1.2em;font-size:.92rem}
+ol.steps li{margin:6px 0}
 
 /* Notificaciones flotantes */
 #toasts{position:fixed;top:16px;right:16px;z-index:1000;display:flex;flex-direction:column;gap:10px;width:min(380px,calc(100vw - 32px))}
@@ -99,47 +119,91 @@ dialog label{margin-top:12px}
 .toast.error{border-left-color:var(--err)}
 .toast strong{display:block;margin-bottom:2px}
 .toast .t-url{font-size:.82rem;color:var(--muted);word-break:break-all}
-.toast pre{font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border-radius:6px;padding:8px;margin:8px 0 0;white-space:pre-wrap;word-break:break-word;max-height:140px;overflow:auto}
+.toast pre{font:12px/1.45 var(--mono);background:var(--bg);border-radius:6px;padding:8px;margin:8px 0 0;white-space:pre-wrap;word-break:break-word;max-height:140px;overflow:auto}
 .toast .add{color:var(--ok)} .toast .del{color:var(--err)}
+.toast mark{background:var(--signal-soft);color:inherit;border-radius:3px}
+.toast ul.items{margin:8px 0 0;padding-left:18px;font-size:.88rem}
+.toast ul.items li{margin:3px 0;word-break:break-word}
+.toast ul.items .mas{color:var(--muted);list-style:none;margin-left:-18px}
 .toast .x{position:absolute;top:8px;right:8px;border:0;background:none;padding:4px 8px;font-size:1.1rem;color:var(--muted)}
-.toast .open{margin-top:10px}
+.toast .open,.toast .ignore{margin-top:10px}
+.toast .ignore{margin-left:6px}
 @keyframes drop{from{opacity:0;transform:translateY(-12px) scale(.97)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){
   .toast,.mon[data-status="checking"] .ring svg{animation:none}
   .ring .bar{transition:none}
 }
-@media (max-width:520px){
-  .mon{grid-template-columns:1fr}
-}
+@media (max-width:520px){ .mon{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
 <div id="toasts" aria-live="polite"></div>
 
+<!-- ============ Diálogo: ajustes de una página ============ -->
 <dialog id="editDlg">
   <form method="dialog" id="editForm">
     <h2>Ajustes de la página</h2>
     <p class="meta" id="e-url"></p>
-    <label for="e-interval">Comprobar cada (segundos)</label>
-    <input id="e-interval" type="number" min="10">
-    <label for="e-mode">Qué comparar</label>
-    <select id="e-mode">
-      <option value="text">Solo el texto visible (recomendado)</option>
-      <option value="html">Todo el código HTML</option>
-    </select>
+    <div class="row">
+      <div style="flex:1 1 200px">
+        <label for="e-watch">Avisar cuando</label>
+        <select id="e-watch">
+          <option value="nuevo">Haya información nueva</option>
+          <option value="enlaces">Aparezcan enlaces nuevos</option>
+          <option value="numero">Cambie un número (precio, plazas…)</option>
+          <option value="cambios">Cambie cualquier cosa</option>
+        </select>
+      </div>
+      <div style="flex:0 1 150px">
+        <label for="e-interval">Cada (segundos)</label>
+        <input id="e-interval" type="number" min="10">
+      </div>
+    </div>
+    <div class="row numOpts">
+      <div style="flex:1 1 200px">
+        <label for="e-numCond">Avisar si el número</label>
+        <select id="e-numCond" class="numCond"></select>
+      </div>
+      <div style="flex:0 1 150px">
+        <label for="e-numValor">Valor límite</label>
+        <input id="e-numValor" type="number" step="any">
+      </div>
+    </div>
     <label for="e-selector">Solo esta parte (selector CSS)</label>
-    <input id="e-selector" type="text" placeholder="p. ej. #precio">
-    <label for="e-proxy">Forma de acceso</label>
-    <select id="e-proxy">
-      <option value="auto">Automática</option>
-      <option value="direct">Directa (sin proxy)</option>
-      <option value="allorigins">Proxy allorigins.win</option>
-      <option value="codetabs">Proxy codetabs.com</option>
-      <option value="corsproxy">Proxy corsproxy.io</option>
-    </select>
+    <input id="e-selector" type="text" placeholder="p. ej. #precio, main, .noticias">
+    <div class="row">
+      <div style="flex:1 1 200px">
+        <label for="e-mode">Qué comparar</label>
+        <select id="e-mode">
+          <option value="text">Solo el texto visible (recomendado)</option>
+          <option value="html">Todo el código HTML</option>
+        </select>
+      </div>
+      <div style="flex:1 1 200px">
+        <label for="e-proxy">Forma de acceso</label>
+        <select id="e-proxy" class="proxySel"></select>
+      </div>
+    </div>
+    <label for="e-keywords">Avisar solo si lo nuevo contiene (una por línea)</label>
+    <textarea id="e-keywords" rows="2"></textarea>
     <label for="e-ignore">Ignorar líneas que contengan (una por línea)</label>
-    <textarea id="e-ignore" rows="4"></textarea>
+    <textarea id="e-ignore" rows="3"></textarea>
     <label class="check"><input type="checkbox" id="e-random"> Ignorar códigos aleatorios</label>
+
+    <h3>Horario de vigilancia</h3>
+    <div class="actions">
+      <span>Solo entre</span>
+      <input id="e-hDesde" type="time" class="time" aria-label="Desde">
+      <span>y</span>
+      <input id="e-hHasta" type="time" class="time" aria-label="Hasta">
+    </div>
+    <label class="check"><input type="checkbox" id="e-laborables"> Solo de lunes a viernes</label>
+    <p class="hint">Deja las horas vacías para vigilar a cualquier hora.</p>
+
+    <h3>Avisos</h3>
+    <label class="check"><input type="checkbox" id="e-movil"> Enviar también al móvil (Telegram o ntfy)</label>
+    <label class="check ownerOnly hidden"><input type="checkbox" id="e-cloud"> Vigilar también desde GitHub Actions</label>
+
     <p class="hint">Al guardar, la versión actual pasa a ser la nueva referencia, sin avisar.</p>
     <div class="actions" style="margin-top:16px;justify-content:flex-end">
       <button type="button" class="small" id="e-cancel">Cancelar</button>
@@ -148,19 +212,49 @@ dialog label{margin-top:12px}
   </form>
 </dialog>
 
+<!-- ============ Diálogo: historial de una página ============ -->
+<dialog id="histDlg">
+  <h2>Historial de avisos</h2>
+  <p class="meta" id="h-url"></p>
+  <div id="h-list"></div>
+  <div class="actions" style="margin-top:16px;justify-content:flex-end">
+    <button type="button" class="small danger" id="h-clear">Borrar historial de esta página</button>
+    <button type="button" class="small primary" id="h-close">Cerrar</button>
+  </div>
+</dialog>
+
+<!-- ============ Diálogo: acceso del propietario ============ -->
+<dialog id="ownerDlg">
+  <form method="dialog" id="ownerForm">
+    <h2>Acceso del propietario</h2>
+    <p class="hint" style="font-size:.9rem">Esta parte solo funciona para la persona dueña del repositorio. Pega un token de GitHub de tu cuenta con acceso a este repositorio.</p>
+    <label for="o-repo">Repositorio</label>
+    <input id="o-repo" type="text" autocomplete="off">
+    <label for="o-token">Token de GitHub</label>
+    <input id="o-token" type="password" autocomplete="off" placeholder="github_pat_…">
+    <p class="hint">Token <em>fine-grained</em> con «Only select repositories» (este repositorio) y permisos <strong>Actions: Read and write</strong> y <strong>Variables: Read and write</strong>. Se guarda solo en este navegador.</p>
+    <p id="o-estado" class="hint"></p>
+    <div class="actions" style="margin-top:16px;justify-content:flex-end">
+      <button type="button" class="small" id="o-cancel">Cancelar</button>
+      <button type="submit" class="small primary" id="o-ok">Verificar y entrar</button>
+    </div>
+  </form>
+</dialog>
+
 <div class="wrap">
   <header>
     <h1>Vigía</h1>
-    <p>Escribe una dirección, elige cada cuánto mirarla y deja esta pestaña abierta. Si la página cambia, te avisa con una notificación flotante.</p>
+    <p>Escribe una dirección, elige cada cuánto mirarla y deja esta pestaña abierta. Cuando la página publique algo nuevo, te avisa aquí, en una ventana flotante o en el móvil.</p>
   </header>
 
+  <!-- ============ Alta de páginas ============ -->
   <form id="addForm" class="panel" autocomplete="off">
     <div class="row">
       <div class="grow">
         <label for="url">Página a vigilar</label>
         <input id="url" type="text" inputmode="url" placeholder="https://ejemplo.com/noticias" required>
       </div>
-      <div style="flex:0 1 190px">
+      <div style="flex:0 1 180px">
         <label for="interval">Comprobar cada</label>
         <select id="interval">
           <option value="30">30 segundos</option>
@@ -171,6 +265,15 @@ dialog label{margin-top:12px}
           <option value="3600">1 hora</option>
           <option value="21600">6 horas</option>
           <option value="custom">Personalizado…</option>
+        </select>
+      </div>
+      <div style="flex:0 1 240px">
+        <label for="watch">Avisar cuando</label>
+        <select id="watch">
+          <option value="nuevo" selected>Haya información nueva</option>
+          <option value="enlaces">Aparezcan enlaces nuevos</option>
+          <option value="numero">Cambie un número (precio, plazas…)</option>
+          <option value="cambios">Cambie cualquier cosa</option>
         </select>
       </div>
       <div id="customBox" class="hidden" style="flex:0 1 200px;display:flex;gap:6px">
@@ -189,6 +292,22 @@ dialog label{margin-top:12px}
       </div>
       <button class="primary" type="submit">Empezar a vigilar</button>
     </div>
+    <p class="hint" id="watchHint"></p>
+
+    <div class="row numOpts" style="margin-top:10px">
+      <div style="flex:1 1 200px">
+        <label for="numCond">Avisar si el número</label>
+        <select id="numCond" class="numCond"></select>
+      </div>
+      <div style="flex:0 1 160px">
+        <label for="numValor">Valor límite</label>
+        <input id="numValor" type="number" step="any" placeholder="p. ej. 20">
+      </div>
+      <div class="grow">
+        <label for="numSelector">Selector CSS del número</label>
+        <input id="numSelector" type="text" placeholder="p. ej. .precio, #plazas">
+      </div>
+    </div>
 
     <details>
       <summary>Opciones avanzadas</summary>
@@ -202,88 +321,242 @@ dialog label{margin-top:12px}
         </div>
         <div style="flex:1 1 200px">
           <label for="selector">Solo esta parte (selector CSS)</label>
-          <input id="selector" type="text" placeholder="p. ej. #precio, .lista-ofertas">
+          <input id="selector" type="text" placeholder="p. ej. main, .noticias">
         </div>
         <div style="flex:1 1 200px">
           <label for="proxy">Forma de acceso</label>
-          <select id="proxy">
-            <option value="auto">Automática</option>
-            <option value="direct">Directa (sin proxy)</option>
-            <option value="allorigins">Proxy allorigins.win</option>
-            <option value="codetabs">Proxy codetabs.com</option>
-            <option value="corsproxy">Proxy corsproxy.io</option>
-          </select>
+          <select id="proxy" class="proxySel"></select>
         </div>
       </div>
-      <p class="hint">Comparar todo el HTML avisa hasta de cambios invisibles (anuncios, tokens), así que suele dar falsos avisos. Un selector CSS limita la vigilancia a una zona concreta, como un precio o una lista.</p>
+      <p class="hint">Un selector CSS limita la vigilancia a una zona concreta, como el listado de noticias, y evita avisos por menús o publicidad.</p>
+      <label for="keywords" style="margin-top:12px">Avisar solo si lo nuevo contiene (una palabra o frase por línea, opcional)</label>
+      <textarea id="keywords" rows="2" placeholder="convocatoria&#10;plazo abierto"></textarea>
       <label for="ignore" style="margin-top:12px">Ignorar líneas que contengan (una por línea)</label>
-      <textarea id="ignore" rows="2" placeholder="go-mpulse.net&#10;Visitas hoy:"></textarea>
+      <textarea id="ignore" rows="2" placeholder="Visitas hoy:"></textarea>
       <label class="check"><input type="checkbox" id="random" checked> Ignorar códigos aleatorios (tokens, identificadores, marcas de tiempo)</label>
     </details>
 
     <div class="toggles">
-      <label><input type="checkbox" id="optSound" checked> Sonido al detectar cambios</label>
-      <label><input type="checkbox" id="optSystem"> Notificación del sistema también</label>
+      <label class="check"><input type="checkbox" id="optSound" checked> Sonido al detectar novedades</label>
+      <label class="check"><input type="checkbox" id="optRepeat"> Repetir el sonido cada 30 s hasta que lo veas</label>
+      <label class="check"><input type="checkbox" id="optSystem"> Notificación del sistema también</label>
     </div>
-    <div class="actions" style="margin-top:14px;align-items:center">
+    <div class="actions" style="margin-top:14px">
       <button type="button" class="small" id="btnPip">Abrir ventana flotante</button>
       <button type="button" class="small" id="btnTest">Probar aviso</button>
       <span class="hint" id="permInfo" style="margin:0"></span>
     </div>
-    <p class="hint">La ventana flotante se queda encima de las demás pestañas y programas, y muestra ahí los avisos.</p>
   </form>
 
+  <!-- ============ Lista ============ -->
   <section>
     <h2>Páginas vigiladas</h2>
     <div id="list"></div>
   </section>
 
+  <!-- ============ Avisos al móvil ============ -->
   <section>
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+    <h2>Avisos al móvil</h2>
+    <div class="panel">
+      <div class="sub">
+        <h3>Telegram</h3>
+        <label class="check" style="margin-top:0"><input type="checkbox" id="tgOn"> Enviar avisos por Telegram</label>
+        <div class="row" style="margin-top:8px">
+          <div class="grow">
+            <label for="tgToken">Token del bot</label>
+            <input id="tgToken" type="password" autocomplete="off" placeholder="123456789:AA…">
+          </div>
+          <div style="flex:1 1 180px">
+            <label for="tgChat">Chat ID</label>
+            <input id="tgChat" type="text" autocomplete="off" placeholder="p. ej. 123456789">
+          </div>
+        </div>
+        <div class="actions" style="margin-top:10px">
+          <button type="button" class="small" id="tgDetect">Detectar mi chat ID</button>
+          <button type="button" class="small" id="tgTest">Enviar prueba</button>
+        </div>
+        <ol class="steps hint">
+          <li>En Telegram, habla con <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>, escribe <code>/newbot</code> y sigue los pasos. Te dará el token.</li>
+          <li>Abre el chat con tu bot nuevo y envíale cualquier mensaje.</li>
+          <li>Pega aquí el token y pulsa «Detectar mi chat ID».</li>
+        </ol>
+      </div>
+
+      <div class="sub">
+        <h3>ntfy (sin cuenta)</h3>
+        <label class="check" style="margin-top:0"><input type="checkbox" id="ntfyOn"> Enviar avisos por ntfy</label>
+        <div class="row" style="margin-top:8px">
+          <div class="grow">
+            <label for="ntfyTopic">Tema</label>
+            <input id="ntfyTopic" type="text" autocomplete="off" placeholder="vigia-un-nombre-dificil-de-adivinar">
+          </div>
+          <div style="flex:1 1 220px">
+            <label for="ntfyServer">Servidor</label>
+            <input id="ntfyServer" type="url" placeholder="https://ntfy.sh">
+          </div>
+        </div>
+        <div class="actions" style="margin-top:10px">
+          <button type="button" class="small" id="ntfyTest">Enviar prueba</button>
+          <button type="button" class="small" id="ntfyRandom">Generar tema seguro</button>
+        </div>
+        <p class="hint">Instala la app ntfy en el móvil y suscríbete al mismo tema. Cualquiera que conozca el nombre del tema puede leer los avisos, así que usa uno difícil de adivinar.</p>
+      </div>
+
+      <div class="sub">
+        <h3>Horario silencioso</h3>
+        <label class="check" style="margin-top:0"><input type="checkbox" id="quietOn"> Sin sonido ni notificaciones entre</label>
+        <div class="actions" style="margin-top:8px">
+          <input id="quietDesde" type="time" class="time" aria-label="Desde">
+          <span>y</span>
+          <input id="quietHasta" type="time" class="time" aria-label="Hasta">
+        </div>
+        <p class="hint">En ese horario los avisos se siguen guardando y llegan al móvil sin sonar.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ GitHub Actions (solo propietario) ============ -->
+  <section id="ghSection" hidden>
+    <h2>GitHub Actions</h2>
+    <div class="panel">
+      <p style="margin-top:0">Conectado como <strong id="ghLogin"></strong> al repositorio <code id="ghRepo"></code>. GitHub comprobará las páginas marcadas con la etiqueta «GitHub» aunque tengas el ordenador apagado, y te avisará por Telegram o ntfy.</p>
+      <div class="actions">
+        <button type="button" class="small primary" id="ghSync">Enviar lista a GitHub</button>
+        <button type="button" class="small" id="ghRun">Ejecutar ahora</button>
+        <button type="button" class="small" id="ghRefresh">Ver últimas ejecuciones</button>
+        <button type="button" class="small danger" id="ghLogout">Desconectar</button>
+      </div>
+      <p class="hint" id="ghEstado"></p>
+      <ul class="log" id="ghRuns"></ul>
+      <details>
+        <summary>Cómo prepararlo (una sola vez)</summary>
+        <ol class="steps">
+          <li>Sube al repositorio <code>.github/workflows/vigia.yml</code> y <code>vigia/vigia-action.mjs</code>.</li>
+          <li>En el repositorio, ve a <em>Settings → Secrets and variables → Actions → Secrets</em> y crea <code>TELEGRAM_TOKEN</code> y <code>TELEGRAM_CHAT_ID</code>, o bien <code>NTFY_TOPIC</code> (y opcionalmente <code>NTFY_SERVER</code>).</li>
+          <li>En cada página que quieras vigilar desde GitHub, abre «Ajustes» y marca «Vigilar también desde GitHub Actions».</li>
+          <li>Pulsa «Enviar lista a GitHub». Se guarda como variable privada del repositorio y se activa el workflow.</li>
+          <li>Pulsa «Ejecutar ahora» para probarlo. Después se ejecutará solo cada 15 minutos.</li>
+        </ol>
+        <p class="hint">La lista se guarda en variables del repositorio, que solo ven quienes tienen acceso de escritura. Las copias (forks) no reciben ni variables ni secretos, así que el workflow no se ejecuta en ellas.</p>
+      </details>
+    </div>
+  </section>
+
+  <!-- ============ Historial general ============ -->
+  <section>
+    <div class="actions" style="justify-content:space-between">
       <h2>Historial</h2>
       <button class="small" type="button" id="clearLog">Borrar historial</button>
     </div>
     <div class="panel"><ul class="log" id="log"></ul></div>
   </section>
 
+  <!-- ============ Copia de seguridad y conexión ============ -->
+  <section>
+    <h2>Copia de seguridad y conexión</h2>
+    <div class="panel">
+      <div class="sub">
+        <h3>Exportar e importar</h3>
+        <div class="actions">
+          <button type="button" class="small" id="btnExport">Exportar configuración</button>
+          <button type="button" class="small" id="btnImport">Importar configuración</button>
+          <input type="file" id="importFile" accept="application/json,.json" hidden>
+        </div>
+        <label class="check"><input type="checkbox" id="exportSecrets"> Incluir datos de Telegram y ntfy en la exportación</label>
+        <p class="hint">Sirve para pasar tus páginas a otro navegador u ordenador. Al importar, las páginas que ya tienes no se duplican.</p>
+      </div>
+      <div class="sub">
+        <h3>Proxy propio</h3>
+        <label for="proxyPropio">Dirección de tu proxy (usa <code>{url}</code> donde va la página)</label>
+        <input id="proxyPropio" type="url" placeholder="https://vigia-proxy.tu-usuario.workers.dev/?url={url}">
+        <p class="hint">Opcional. Con un proxy propio (por ejemplo, un Cloudflare Worker gratuito con el archivo <code>cloudflare-worker.js</code>) no dependes de los proxies públicos. En modo automático se prueba primero.</p>
+      </div>
+    </div>
+  </section>
+
   <section class="notes">
     <h2>Si algo no funciona</h2>
-    <p>Muchas webs no dejan que otra página lea su contenido (bloqueo CORS). En modo automático, Vigía prueba primero el acceso directo y después varios proxies públicos. Si ninguno responde, esa web no se puede vigilar desde el navegador.</p>
-    <p>Chromium ralentiza los temporizadores de las pestañas en segundo plano, a veces hasta una comprobación por minuto. Para intervalos muy cortos, deja esta pestaña visible o en una ventana aparte.</p>
-    <p>Las notificaciones del sistema funcionan en GitHub Pages (https) y en localhost. Abriendo el archivo directamente (file://) puede que Chromium no las permita; la notificación flotante funciona siempre.</p>
+    <p>Muchas webs no dejan que otra página lea su contenido (bloqueo CORS). En modo automático, Vigía prueba tu proxy propio, el acceso directo y varios proxies públicos. Si ninguno responde, esa web no se puede vigilar desde el navegador, pero sí desde GitHub Actions.</p>
+    <p>Chromium ralentiza las pestañas en segundo plano, a veces hasta una comprobación por minuto. Para intervalos cortos, usa la ventana flotante o deja esta pestaña en una ventana aparte.</p>
+    <p>Las notificaciones del sistema funcionan en GitHub Pages (https) y en localhost; abriendo el archivo directamente (file://) puede que Chromium no las permita.</p>
   </section>
 </div>
 
 <script>
 (() => {
   "use strict";
+
+  /* Opcional: tu usuario de GitHub. Si lo dejas vacío, se toma de la dirección *.github.io.
+     Solo ese usuario puede desbloquear el panel de GitHub Actions (entrando con #propietario). */
+  const PROPIETARIO_GITHUB = "";
+
   const $ = s => document.querySelector(s);
   const STORE_KEY = "vigia:v1";
+  const OWNER_KEY = "vigia:propietario";
   const RING_C = 2 * Math.PI * 27;
+  const NORM_VERSION = 2;
+  const MAX_SEEN = 5000;
+  let owner = null;
+  try { owner = JSON.parse(localStorage.getItem(OWNER_KEY) || "null"); } catch {}
+  let pipWin = null;
 
-  /* ---------- Estado ---------- */
-  let state = { monitors: [], log: [], settings: { sound: true, system: false } };
+  /* =====================================================================
+     Estado
+     ===================================================================== */
+  const DEF_SETTINGS = {
+    sound: true, repeat: false, system: false, exportSecrets: false, proxyPropio: "",
+    quiet: { on: false, desde: "23:00", hasta: "08:00" },
+    tg: { on: false, token: "", chat: "" },
+    ntfy: { on: false, server: "https://ntfy.sh", topic: "" }
+  };
+  let state = { monitors: [], log: [], settings: {} };
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
     if (saved) state = Object.assign(state, saved);
   } catch (e) { /* sin almacenamiento: seguimos en memoria */ }
+  const ss = state.settings || {};
+  state.settings = Object.assign({}, DEF_SETTINGS, ss, {
+    quiet: Object.assign({}, DEF_SETTINGS.quiet, ss.quiet),
+    tg: Object.assign({}, DEF_SETTINGS.tg, ss.tg),
+    ntfy: Object.assign({}, DEF_SETTINGS.ntfy, ss.ntfy)
+  });
   state.monitors.forEach(m => { m.busy = false; if (m.status === "checking") m.status = "idle"; });
 
   function save() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
     catch (e) {
-      // Si el almacenamiento está lleno, descartamos las líneas guardadas (solo se pierde el detalle del diff)
+      // Almacenamiento lleno: se descarta lo prescindible (detalle del diff)
       state.monitors.forEach(m => m.lines = null);
       try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (_) {}
     }
   }
 
-  /* ---------- Utilidades ---------- */
+  /* =====================================================================
+     Utilidades
+     ===================================================================== */
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
   const uid = () => Math.random().toString(36).slice(2, 10);
   const hms = t => t ? new Date(t).toLocaleTimeString("es-ES") : "—";
   const dt = t => t ? new Date(t).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "medium" }) : "—";
   const host = u => { try { return new URL(u).host; } catch { return u; } };
+  const recorta = (s, n = 140) => (s = String(s)).length > n ? s.slice(0, n) + "…" : s;
+  const normTxt = s => String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const fmtNum = v => Number(v).toLocaleString("es-ES", { maximumFractionDigits: 2 });
+  const toMin = t => { const [h, m] = String(t || "").split(":").map(Number); return isNaN(h) ? null : h * 60 + (m || 0); };
+
+  function enRango(desde, hasta, fecha = new Date()) {
+    const a = toMin(desde), b = toMin(hasta);
+    if (a == null || b == null || a === b) return true;
+    const x = fecha.getHours() * 60 + fecha.getMinutes();
+    return a < b ? (x >= a && x < b) : (x >= a || x < b);
+  }
+  const enSilencio = () => state.settings.quiet.on && enRango(state.settings.quiet.desde, state.settings.quiet.hasta) && !!(state.settings.quiet.desde && state.settings.quiet.hasta);
+  function enHorario(m) {
+    const d = new Date();
+    if (m.laborables && (d.getDay() === 0 || d.getDay() === 6)) return false;
+    if (!m.hDesde || !m.hHasta) return true;
+    return enRango(m.hDesde, m.hHasta, d);
+  }
 
   function fmtDur(sec) {
     if (sec < 60) return `${sec} s`;
@@ -306,9 +579,44 @@ dialog label{margin-top:12px}
     h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
     return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
   }
+  function descargar(nombre, texto, tipo = "application/json") {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([texto], { type: tipo }));
+    a.download = nombre;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
 
-  /* ---------- Descarga de la página ---------- */
+  /* =====================================================================
+     Textos de las opciones
+     ===================================================================== */
+  const WATCH_TXT = { nuevo: "avisa de información nueva", enlaces: "avisa de enlaces nuevos", numero: "vigila un número", cambios: "avisa de cualquier cambio" };
+  const WATCH_HINT = {
+    nuevo: "Avisa cuando aparece texto que no estaba antes. No avisa por lo que desaparece ni por lo que vuelve a aparecer (carruseles, rotaciones).",
+    enlaces: "Ideal para noticias, blogs, foros o tablones: avisa de cada enlace nuevo y lo muestra con su título.",
+    numero: "Lee un número de la página (un precio, plazas libres, un contador) y avisa según la condición que elijas. Necesita el selector CSS de ese número.",
+    cambios: "Avisa de cualquier diferencia, también cuando algo desaparece o se modifica."
+  };
+  const NUM_COND = [
+    ["cambio", "Cambie"], ["baja", "Baje"], ["sube", "Suba"],
+    ["menor", "Baje por debajo del límite"], ["mayor", "Suba por encima del límite"]
+  ];
+  document.querySelectorAll(".numCond").forEach(sel => {
+    sel.innerHTML = NUM_COND.map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
+  });
+  const PROXY_OPTS = [
+    ["auto", "Automática"], ["propio", "Proxy propio"], ["direct", "Directa (sin proxy)"],
+    ["allorigins", "Proxy allorigins.win"], ["codetabs", "Proxy codetabs.com"], ["corsproxy", "Proxy corsproxy.io"]
+  ];
+  document.querySelectorAll(".proxySel").forEach(sel => {
+    sel.innerHTML = PROXY_OPTS.map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
+  });
+
+  /* =====================================================================
+     Descarga de páginas
+     ===================================================================== */
   const PROXIES = {
+    propio:     u => state.settings.proxyPropio.replace("{url}", encodeURIComponent(u)),
     direct:     u => u,
     allorigins: u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}&_=${Date.now()}`,
     codetabs:   u => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`,
@@ -316,9 +624,12 @@ dialog label{margin-top:12px}
   };
 
   async function fetchPage(m) {
-    const order = m.proxy === "auto"
-      ? [...new Set([m.via, "direct", "allorigins", "codetabs", "corsproxy"].filter(Boolean))]
+    const propio = state.settings.proxyPropio.includes("{url}");
+    let order = m.proxy === "auto"
+      ? [...new Set([m.via, propio && "propio", "direct", "allorigins", "codetabs", "corsproxy"].filter(Boolean))]
       : [m.proxy];
+    if (!propio) order = order.filter(k => k !== "propio");
+    if (!order.length) throw new Error("No hay proxy propio configurado (sección «Copia de seguridad y conexión»).");
     let lastErr = "";
     for (const key of order) {
       const ctrl = new AbortController();
@@ -337,23 +648,28 @@ dialog label{margin-top:12px}
     throw new Error(`No se pudo leer la página (${lastErr}).`);
   }
 
-  /* ---------- Extracción y comparación ---------- */
+  /* =====================================================================
+     Extracción de contenido
+     ===================================================================== */
   const BLOCK = "address,article,aside,blockquote,br,dd,div,dl,dt,figcaption,figure,footer,form,h1,h2,h3,h4,h5,h6,header,hr,li,main,nav,ol,p,pre,section,table,td,th,tr,ul,option,button";
+
+  function parseHtml(raw) { return new DOMParser().parseFromString(raw, "text/html"); }
+  function raices(doc, m, porDefecto) {
+    if (!m.selector) return [porDefecto];
+    let r;
+    try { r = [...doc.querySelectorAll(m.selector)]; }
+    catch { throw new Error("El selector CSS no es válido."); }
+    if (!r.length) throw new Error(`El selector «${m.selector}» no encontró nada en la página.`);
+    return r;
+  }
 
   function extract(raw, m) {
     const looksHtml = /<\s*(html|head|body|div|p|span|a)\b/i.test(raw);
     if (!looksHtml) return raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-
-    const doc = new DOMParser().parseFromString(raw, "text/html");
-    let roots = [doc.documentElement];
-    if (m.selector) {
-      try { roots = [...doc.querySelectorAll(m.selector)]; }
-      catch { throw new Error("El selector CSS no es válido."); }
-      if (!roots.length) throw new Error(`El selector «${m.selector}» no encontró nada en la página.`);
-    }
+    const doc = parseHtml(raw);
+    const roots = raices(doc, m, doc.documentElement);
     if (m.mode === "html") {
       if (m.random !== false) {
-        // El contenido de los scripts en línea y los atributos de seguridad cambian en cada carga
         roots.forEach(r => {
           r.querySelectorAll("script:not([src])").forEach(s => { s.textContent = ""; });
           r.querySelectorAll("[nonce],[integrity]").forEach(n => { n.removeAttribute("nonce"); n.removeAttribute("integrity"); });
@@ -371,31 +687,94 @@ dialog label{margin-top:12px}
       .map(s => s.replace(/\s+/g, " ").trim()).filter(Boolean);
   }
 
-  // Si cambia la forma de procesar, la siguiente comprobación toma nueva referencia sin avisar
-  const NORM_VERSION = 2;
-
   function limpiarAleatorio(line) {
     return line
       .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "‹id›")
       .replace(/\b\d{10,}\b/g, "‹n›")
       .replace(/(?=[A-Za-z0-9_+-]*\d)(?=[A-Za-z0-9_+-]*[A-Za-z])[A-Za-z0-9_+-]{20,}={0,2}/g, "‹código›");
   }
-
-  function reglasIgnorar(m) {
-    return String(m.ignore || "").split("\n").map(s => s.trim()).filter(Boolean);
-  }
-
+  const lineasDe = txt => String(txt || "").split("\n").map(s => s.trim()).filter(Boolean);
+  const reglasIgnorar = m => lineasDe(m.ignore);
+  const palabras = m => lineasDe(m.keywords).map(normTxt);
   function filtrar(lines, m) {
     const reglas = reglasIgnorar(m);
     let out = reglas.length ? lines.filter(l => !reglas.some(r => l.includes(r))) : lines;
     if (m.random !== false) out = out.map(limpiarAleatorio);
     return out;
   }
+  function coincide(text, kws) {
+    if (!kws.length) return true;
+    const t = normTxt(text);
+    return kws.some(k => t.includes(k));
+  }
 
-  // Muestra solo la zona donde empiezan a diferir dos líneas, con la parte distinta resaltada
+  function esFeed(raw) {
+    return /^\s*(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*|<\?xml-stylesheet[^>]*>\s*)*<(rss|feed|rdf:RDF)\b/i.test(raw);
+  }
+  function leerFeed(raw, m) {
+    const doc = new DOMParser().parseFromString(raw, "text/xml");
+    if (doc.getElementsByTagName("parsererror").length) throw new Error("El feed no se pudo leer (XML no válido).");
+    const nodos = [...doc.getElementsByTagName("item"), ...doc.getElementsByTagName("entry")];
+    return nodos.map(n => {
+      const get = tag => { const e = n.getElementsByTagName(tag)[0]; return e ? e.textContent.trim() : ""; };
+      let link = get("link");
+      const le = [...n.getElementsByTagName("link")].find(l => l.getAttribute("href") && (!l.getAttribute("rel") || l.getAttribute("rel") === "alternate"));
+      if (le) link = le.getAttribute("href");
+      try { if (link) link = new URL(link, m.url).href; } catch {}
+      const titulo = (get("title") || link || "(sin título)").replace(/\s+/g, " ");
+      return { key: "f:" + hash(get("guid") || get("id") || link || titulo), text: titulo, href: link };
+    });
+  }
+  function buscarFeed(raw, m) {
+    if (!/<link[^>]+(rss|atom)\+xml/i.test(raw)) return null;
+    const l = parseHtml(raw).querySelector('link[rel~="alternate"][type*="rss"], link[rel~="alternate"][type*="atom"]');
+    if (!l || !l.getAttribute("href")) return null;
+    try { const u = new URL(l.getAttribute("href"), m.url).href; return u !== m.url ? u : null; } catch { return null; }
+  }
+  function leerEnlaces(raw, m) {
+    const doc = parseHtml(raw);
+    const roots = raices(doc, m, doc.body || doc.documentElement);
+    const vistos = new Set(), out = [];
+    roots.forEach(r => r.querySelectorAll("a[href]").forEach(a => {
+      const h = a.getAttribute("href").trim();
+      if (!h || /^(#|javascript:|mailto:|tel:)/i.test(h)) return;
+      let u;
+      try { u = new URL(h, m.url); } catch { return; }
+      u.hash = "";
+      const k = u.href;
+      if (vistos.has(k)) return;
+      vistos.add(k);
+      const img = a.querySelector("img[alt]");
+      const text = (a.textContent.replace(/\s+/g, " ").trim() || a.getAttribute("title") || a.getAttribute("aria-label") || (img && img.getAttribute("alt")) || k).trim();
+      out.push({ key: "l:" + hash(k), text, href: k });
+    }));
+    return out;
+  }
+
+  // Interpreta "1.299,99 €", "$1,299.99", "19,99", "1 250" …
+  function leerNumero(txt) {
+    const mt = String(txt).replace(/[\s\u00a0\u202f]/g, "").match(/-?\d[\d.,']*/);
+    if (!mt) return null;
+    let s = mt[0].replace(/'/g, "").replace(/[.,]+$/, "");
+    const iDot = s.lastIndexOf("."), iCom = s.lastIndexOf(",");
+    if (iDot === -1 && iCom === -1) return parseFloat(s);
+    if (iDot >= 0 && iCom >= 0) {
+      const dec = Math.max(iDot, iCom);
+      return parseFloat(s.slice(0, dec).replace(/[.,]/g, "") + "." + s.slice(dec + 1));
+    }
+    const sep = iDot >= 0 ? "." : ",";
+    const partes = s.split(sep);
+    if (partes.length > 2 || partes[partes.length - 1].length === 3) return parseFloat(partes.join(""));
+    return parseFloat(partes.join("."));
+  }
+
+  function diff(oldL, newL) {
+    const o = new Set(oldL), n = new Set(newL);
+    return { added: newL.filter(x => !o.has(x)), removed: oldL.filter(x => !n.has(x)) };
+  }
   function fragmento(line, otra) {
     const LIM = 150;
-    if (otra == null) return esc(line.length > LIM ? line.slice(0, LIM) + "…" : line);
+    if (otra == null) return esc(recorta(line, LIM));
     let p = 0;
     while (p < line.length && p < otra.length && line[p] === otra[p]) p++;
     let s = 0;
@@ -403,75 +782,181 @@ dialog label{margin-top:12px}
     const ini = Math.max(0, p - 40);
     const dif = line.slice(p, line.length - s);
     const fin = Math.min(line.length - s + 30, line.length);
-    return (ini > 0 ? "…" : "") + esc(line.slice(ini, p)) +
-      `<mark>${esc(dif.length > LIM ? dif.slice(0, LIM) + "…" : dif)}</mark>` +
+    return (ini > 0 ? "…" : "") + esc(line.slice(ini, p)) + `<mark>${esc(recorta(dif, LIM))}</mark>` +
       esc(line.slice(line.length - s, fin)) + (fin < line.length ? "…" : "");
   }
-
   function prefijoComun(a, b) {
     let p = 0;
     while (p < a.length && p < b.length && a[p] === b[p]) p++;
     return a.slice(0, Math.min(p, 80)).trim();
   }
-
-  function diff(oldL, newL) {
-    const o = new Set(oldL), n = new Set(newL);
-    return { added: newL.filter(x => !o.has(x)), removed: oldL.filter(x => !n.has(x)) };
+  function etiqueta(kind, n) {
+    const uno = n === 1;
+    if (kind === "feed") return uno ? "entrada nueva" : "entradas nuevas";
+    if (kind === "enlaces") return uno ? "enlace nuevo" : "enlaces nuevos";
+    return uno ? "línea nueva" : "líneas nuevas";
   }
+  const AVISO_VACIO = "No se encontró texto en el HTML descargado; puede que la página se cargue con JavaScript. Prueba «Aparezcan enlaces nuevos» o vigila su feed RSS si lo tiene.";
 
-  /* ---------- Comprobación ---------- */
+  /* =====================================================================
+     Comprobación
+     ===================================================================== */
   async function check(m) {
     if (m.busy) return;
     m.busy = true; m.status = "checking"; m.message = "Comprobando…";
     renderList();
     try {
       const raw = await fetchPage(m);
-      const lines = filtrar(extract(raw, m), m);
-      const h = hash(lines.join("\n"));
-      if (m.hash && (m.rebase || m.normVersion !== NORM_VERSION)) {
-        m.status = "ok";
-        m.message = `Ajustes aplicados. Nueva referencia guardada (${lines.length} líneas).`;
-        addLog(m, "info", "Nueva referencia tras cambiar los ajustes");
-      } else if (!m.hash) {
-        m.status = "ok";
-        m.message = `Referencia guardada (${lines.length} líneas). A partir de ahora avisará de cualquier cambio.`;
-        addLog(m, "info", "Referencia inicial guardada");
-      } else if (h !== m.hash) {
-        const d = m.lines ? diff(m.lines, lines) : null;
+      const feed = m.watch !== "numero" && esFeed(raw);
+      m.isFeed = feed;
+      m.feedUrl = feed || m.watch === "numero" ? null : buscarFeed(raw, m);
+      if (m.watch === "numero") revisarNumero(m, raw);
+      else if (feed || m.watch === "nuevo" || m.watch === "enlaces") revisarNovedades(m, raw, feed);
+      else revisarCambios(m, raw);
+      m.rebase = false;
+      m.normVersion = NORM_VERSION;
+      m.fails = 0;
+    } catch (e) {
+      m.fails = (m.fails || 0) + 1;
+      m.status = "error";
+      m.message = e.message + (m.fails < 3 ? ` Reintento ${m.fails} de 3 en breve.` : " Prueba otra forma de acceso en Ajustes.");
+      if (m.fails === 3) {
+        toast({ kind: "error", title: "No se puede comprobar", url: m.url, body: e.message });
+        addLog(m, "error", e.message);
+        if (m.movil !== false) enviarMovil({ titulo: `Vigía no puede comprobar ${host(m.url)}`, lineas: [{ text: e.message }], url: m.url, silencioso: true });
+      }
+    } finally {
+      m.busy = false;
+      m.lastCheck = Date.now();
+      const espera = m.fails && m.fails < 3 ? Math.min(m.interval, 15 * m.fails) : m.interval;
+      m.nextAt = Date.now() + espera * 1000;
+      save();
+      renderList();
+    }
+  }
+
+  function revisarNovedades(m, raw, feed) {
+    const kind = feed ? "feed" : m.watch;
+    let items = feed ? leerFeed(raw, m)
+      : kind === "enlaces" ? leerEnlaces(raw, m)
+      : filtrar(extract(raw, m), m).map(l => ({ key: "t:" + hash(l), text: l }));
+    const reglas = reglasIgnorar(m);
+    if (reglas.length) items = items.filter(i => !reglas.some(r => i.text.includes(r) || (i.href || "").includes(r)));
+    const claves = items.map(i => i.key);
+
+    if (!m.seen || m.rebase || m.seenKind !== kind || m.normVersion !== NORM_VERSION) {
+      m.seen = [...new Set(claves)].slice(0, MAX_SEEN);
+      m.status = "ok";
+      m.message = items.length
+        ? `Referencia guardada: ${items.length} ${feed ? "entradas" : kind === "enlaces" ? "enlaces" : "líneas"}. Avisará cuando aparezcan nuevas.`
+        : (feed ? "El feed está vacío por ahora. Avisará cuando publique algo." : AVISO_VACIO);
+      addLog(m, "info", m.rebase ? "Nueva referencia tras cambiar los ajustes" : "Referencia inicial guardada");
+    } else {
+      const seen = new Set(m.seen), ahora = new Set();
+      const nuevos = items.filter(i => !seen.has(i.key) && !ahora.has(i.key) && ahora.add(i.key));
+      const kws = palabras(m);
+      const relevantes = nuevos.filter(i => coincide(i.text + " " + (i.href || ""), kws));
+      if (relevantes.length) {
+        m.changes = (m.changes || 0) + 1;
+        m.lastChange = Date.now();
+        m.status = "changed";
+        m.message = `${relevantes.length} ${etiqueta(kind, relevantes.length)}: ${recorta(relevantes[0].text, 80)}`;
+        notifyNuevos(m, relevantes, kind);
+      } else {
+        m.status = m.status === "changed" && m.unseen ? "changed" : "ok";
+        m.message = nuevos.length
+          ? `${nuevos.length} ${etiqueta(kind, nuevos.length)}, pero ninguna con las palabras clave.`
+          : (items.length ? "Nada nuevo en la última comprobación." : AVISO_VACIO);
+      }
+      m.seen = [...new Set([...claves, ...m.seen])].slice(0, MAX_SEEN);
+    }
+    m.seenKind = kind;
+  }
+
+  function revisarCambios(m, raw) {
+    const lines = filtrar(extract(raw, m), m);
+    const h = hash(lines.join("\n"));
+    if (m.hash && (m.rebase || m.normVersion !== NORM_VERSION || m.seenKind !== "cambios")) {
+      m.status = "ok";
+      m.message = `Ajustes aplicados. Nueva referencia guardada (${lines.length} líneas).`;
+      addLog(m, "info", "Nueva referencia tras cambiar los ajustes");
+    } else if (!m.hash) {
+      m.status = "ok";
+      m.message = lines.length ? `Referencia guardada (${lines.length} líneas). A partir de ahora avisará de cualquier cambio.` : AVISO_VACIO;
+      addLog(m, "info", "Referencia inicial guardada");
+    } else if (h !== m.hash) {
+      const d = m.lines ? diff(m.lines, lines) : null;
+      const kws = palabras(m);
+      if (!kws.length || !d || d.added.some(l => coincide(l, kws))) {
         m.changes = (m.changes || 0) + 1;
         m.lastChange = Date.now();
         m.status = "changed";
         m.message = d ? `Cambió: +${d.added.length} líneas nuevas, −${d.removed.length} eliminadas.` : "La página ha cambiado.";
         notifyChange(m, d);
       } else {
-        m.status = m.status === "changed" && m.unseen ? "changed" : "ok";
-        m.message = `Sin cambios en la última comprobación.`;
+        m.status = "ok";
+        m.message = "Ha cambiado, pero no aparece ninguna de las palabras clave.";
       }
-      m.hash = h;
-      m.rebase = false;
-      m.normVersion = NORM_VERSION;
-      m.lines = lines.length <= 4000 ? lines : null;
-      m.errorShown = false;
-    } catch (e) {
-      m.status = "error";
-      m.message = e.message + " Prueba otra forma de acceso en opciones avanzadas.";
-      if (!m.errorShown) {
-        toast({ kind: "error", title: "No se pudo comprobar", url: m.url, body: e.message });
-        addLog(m, "error", e.message);
-        m.errorShown = true;
-      }
-    } finally {
-      m.busy = false;
-      m.lastCheck = Date.now();
-      m.nextAt = Date.now() + m.interval * 1000;
-      save();
-      renderList();
+    } else {
+      m.status = m.status === "changed" && m.unseen ? "changed" : "ok";
+      m.message = "Sin cambios en la última comprobación.";
     }
+    m.hash = h;
+    m.lines = lines.length <= 4000 ? lines : null;
+    m.seenKind = "cambios";
   }
 
-  /* ---------- Avisos ---------- */
-  let unseen = 0;
+  function revisarNumero(m, raw) {
+    if (!m.selector) throw new Error("Para vigilar un número indica en «Solo esta parte» el selector CSS del precio o cifra.");
+    const doc = parseHtml(raw);
+    const el = raices(doc, m, null)[0];
+    const txt = (el.getAttribute("content") || el.getAttribute("value") || el.textContent || "").replace(/\s+/g, " ").trim();
+    const v = leerNumero(txt);
+    if (v == null || isNaN(v)) throw new Error(`No hay ningún número en «${recorta(txt, 60)}».`);
+    const prev = m.numero;
+    const hist = m.numHist || [];
+    if (!hist.length || hist[hist.length - 1].v !== v) hist.push({ t: Date.now(), v });
+    m.numHist = hist.slice(-60);
+
+    if (prev == null || m.rebase || m.seenKind !== "numero") {
+      m.status = "ok";
+      m.message = `Valor actual: ${fmtNum(v)}. Avisará según la condición elegida.`;
+      addLog(m, "info", `Valor inicial: ${fmtNum(v)}`);
+    } else if (v !== prev) {
+      const lim = Number(m.numValor);
+      const cond = m.numCond || "cambio";
+      const avisar = cond === "cambio"
+        || (cond === "baja" && v < prev) || (cond === "sube" && v > prev)
+        || (cond === "menor" && !isNaN(lim) && v < lim && v < prev)
+        || (cond === "mayor" && !isNaN(lim) && v > lim && v > prev);
+      const pct = prev ? ` (${v > prev ? "+" : ""}${fmtNum((v - prev) / Math.abs(prev) * 100)} %)` : "";
+      m.message = `${fmtNum(prev)} → ${fmtNum(v)}${pct}`;
+      if (avisar) {
+        m.changes = (m.changes || 0) + 1;
+        m.lastChange = Date.now();
+        m.status = "changed";
+        notifyNumero(m, prev, v, pct);
+      } else {
+        m.status = m.status === "changed" && m.unseen ? "changed" : "ok";
+        m.message += ". No cumple la condición para avisar.";
+      }
+    } else {
+      m.status = m.status === "changed" && m.unseen ? "changed" : "ok";
+      m.message = `Sin cambios: ${fmtNum(v)}.`;
+    }
+    m.numero = v;
+    m.seenKind = "numero";
+  }
+
+  /* =====================================================================
+     Avisos
+     ===================================================================== */
+  let unseenTitle = 0, lastRepeat = 0;
   const baseTitle = document.title;
+
+  function registrar(m, titulo, lineas) {
+    m.hist = [{ t: Date.now(), titulo, lineas: lineas.slice(0, 15) }, ...(m.hist || [])].slice(0, 25);
+  }
 
   function notifyChange(m, d) {
     m.unseen = true;
@@ -480,7 +965,6 @@ dialog label{margin-top:12px}
     if (d) {
       const parts = [];
       const pares = Math.min(d.added.length, d.removed.length);
-      // Líneas modificadas: se muestran emparejadas, con la parte distinta resaltada
       for (let i = 0; i < Math.min(pares, 3); i++) {
         parts.push(`<span class="del">− ${fragmento(d.removed[i], d.added[i])}</span>`);
         parts.push(`<span class="add">+ ${fragmento(d.added[i], d.removed[i])}</span>`);
@@ -494,11 +978,9 @@ dialog label{margin-top:12px}
       preview = parts.length ? parts.join("\n") : "Mismo contenido reordenado o con líneas repetidas.";
     }
     const unicos = [...new Set(prefijos)];
+    const titulo = `Cambio en ${host(m.url)}`;
     toast({
-      kind: "changed", sticky: true,
-      title: `Cambio detectado en ${host(m.url)}`,
-      url: m.url,
-      htmlBody: preview,
+      kind: "changed", sticky: true, title: titulo, url: m.url, htmlBody: preview,
       summary: d ? `+${d.added.length} / −${d.removed.length} líneas, ${hms(Date.now())}` : hms(Date.now()),
       onOpen: () => markSeen(m),
       ignoreLabel: unicos.length ? "No avisar de este tipo de cambio" : null,
@@ -510,28 +992,117 @@ dialog label{margin-top:12px}
         toast({ title: "Filtro añadido", url: m.url, body: "Esas líneas se ignorarán a partir de ahora. Puedes revisarlo en Ajustes." });
       }
     });
+    const lineas = d ? [...d.added.slice(0, 8).map(t => ({ text: "+ " + t })), ...d.removed.slice(0, 3).map(t => ({ text: "− " + t }))] : [{ text: "La página ha cambiado." }];
+    registrar(m, titulo, lineas);
     addLog(m, "changed", d ? `Cambio: +${d.added.length} / −${d.removed.length} líneas` : "Cambio detectado");
-    beep();
+    avisarFuera(m, titulo, lineas, m.url);
+  }
 
-    if (state.settings.system && "Notification" in window && Notification.permission === "granted") {
-      try {
-        const n = new Notification(`Cambio en ${host(m.url)}`, {
-          body: d && d.added[0] ? d.added[0].slice(0, 120) : "La página se ha actualizado.",
-          tag: m.id, renotify: true, requireInteraction: true
-        });
-        n.onclick = () => { window.focus(); window.open(m.url, "_blank", "noopener"); n.close(); };
-      } catch (_) {}
+  function notifyNuevos(m, items, kind) {
+    m.unseen = true;
+    const lista = items.slice(0, 6).map(i => i.href
+      ? `<li><a href="${esc(i.href)}" target="_blank" rel="noopener">${esc(recorta(i.text))}</a></li>`
+      : `<li>${esc(recorta(i.text))}</li>`).join("")
+      + (items.length > 6 ? `<li class="mas">y ${items.length - 6} más</li>` : "");
+    const titulo = items.length === 1 ? `Novedad en ${host(m.url)}` : `${items.length} novedades en ${host(m.url)}`;
+    toast({
+      kind: "changed", sticky: true, title: titulo, url: m.url,
+      summary: `${items.length} ${etiqueta(kind, items.length)}, ${hms(Date.now())}`,
+      listHtml: lista, onOpen: () => markSeen(m)
+    });
+    registrar(m, titulo, items);
+    addLog(m, "changed", `${titulo}: ${items.slice(0, 2).map(i => recorta(i.text, 60)).join(" | ")}`);
+    avisarFuera(m, titulo, items, items.length === 1 && items[0].href ? items[0].href : m.url);
+  }
+
+  function notifyNumero(m, prev, v, pct) {
+    m.unseen = true;
+    const titulo = `${v < prev ? "Ha bajado" : "Ha subido"} en ${host(m.url)}`;
+    toast({
+      kind: "changed", sticky: true, title: titulo, url: m.url,
+      summary: hms(Date.now()),
+      htmlBody: `<span class="del">− ${esc(fmtNum(prev))}</span>\n<span class="add">+ ${esc(fmtNum(v))}${esc(pct)}</span>`,
+      onOpen: () => markSeen(m)
+    });
+    const lineas = [{ text: `${fmtNum(prev)} → ${fmtNum(v)}${pct}` }];
+    registrar(m, titulo, lineas);
+    addLog(m, "changed", `${titulo}: ${lineas[0].text}`);
+    avisarFuera(m, titulo, lineas, m.url);
+  }
+
+  // Sonido, notificación del sistema, título, icono y móvil
+  function avisarFuera(m, titulo, lineas, abrir) {
+    const silencio = enSilencio();
+    lastRepeat = Date.now();
+    if (!silencio) {
+      beep();
+      if (state.settings.system && "Notification" in window && Notification.permission === "granted") {
+        try {
+          const n = new Notification(titulo, { body: recorta(lineas[0] ? lineas[0].text : "", 120), tag: m.id, renotify: true, requireInteraction: true });
+          n.onclick = () => { window.focus(); window.open(abrir, "_blank", "noopener"); n.close(); };
+        } catch (_) {}
+      }
     }
-    if (document.hidden) { unseen++; document.title = `(${unseen}) Cambio detectado · Vigía`; }
+    if (document.hidden) { unseenTitle++; document.title = `(${unseenTitle}) Novedades · Vigía`; }
+    if (m.movil !== false) enviarMovil({ titulo, lineas, url: abrir, silencioso: silencio });
   }
 
   function markSeen(m) { m.unseen = false; if (m.status === "changed") m.status = "ok"; save(); renderList(); }
 
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) { unseen = 0; document.title = baseTitle; }
+    if (!document.hidden) { unseenTitle = 0; document.title = baseTitle; }
   });
 
-  function toast({ kind = "info", title, url, body, htmlBody, summary, sticky = false, onOpen, ignoreLabel, onIgnore }) {
+  /* ---------- Envío al móvil ---------- */
+  const escTg = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+  let ultimoErrorMovil = { txt: "", t: 0 };
+
+  async function enviarTelegram(token, chat, { titulo, lineas = [], url, silencioso }) {
+    let texto = `<b>${escTg(titulo)}</b>`;
+    const cuerpo = lineas.slice(0, 8).map(l => l.href
+      ? `• <a href="${escTg(l.href)}">${escTg(recorta(l.text, 200))}</a>`
+      : `• ${escTg(recorta(l.text, 200))}`);
+    if (lineas.length > 8) cuerpo.push(`… y ${lineas.length - 8} más`);
+    if (cuerpo.length) texto += "\n" + cuerpo.join("\n");
+    if (url) texto += `\n\n${escTg(url)}`;
+    const res = await fetch(`https://api.telegram.org/bot${encodeURIComponent(token).replace(/%3A/gi, ":")}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chat, text: texto, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: !!silencioso })
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!j.ok) throw new Error("Telegram: " + (j.description || `error ${res.status}`));
+  }
+
+  async function enviarNtfy(server, topic, { titulo, lineas = [], url, silencioso }) {
+    const click = lineas.length === 1 && lineas[0].href ? lineas[0].href : url;
+    const res = await fetch((server || "https://ntfy.sh").replace(/\/+$/, ""), {
+      method: "POST",
+      body: JSON.stringify({
+        topic, title: titulo,
+        message: lineas.slice(0, 8).map(l => "• " + recorta(l.text, 200)).join("\n") || url || titulo,
+        click: click || undefined, priority: silencioso ? 2 : 4, tags: ["eyes"]
+      })
+    });
+    if (!res.ok) throw new Error(`ntfy: error ${res.status}`);
+  }
+
+  async function enviarMovil(msg) {
+    const s = state.settings, tareas = [];
+    if (s.tg.on && s.tg.token && s.tg.chat) tareas.push(enviarTelegram(s.tg.token, s.tg.chat, msg));
+    if (s.ntfy.on && s.ntfy.topic) tareas.push(enviarNtfy(s.ntfy.server, s.ntfy.topic, msg));
+    const res = await Promise.allSettled(tareas);
+    res.filter(r => r.status === "rejected").forEach(r => {
+      const txt = r.reason.message;
+      if (txt === ultimoErrorMovil.txt && Date.now() - ultimoErrorMovil.t < 600000) return;
+      ultimoErrorMovil = { txt, t: Date.now() };
+      toast({ kind: "error", title: "No se pudo enviar al móvil", body: txt });
+    });
+    return res;
+  }
+
+  /* ---------- Notificaciones flotantes ---------- */
+  function toast({ kind = "info", title, url, body, htmlBody, summary, sticky = false, onOpen, ignoreLabel, onIgnore, listHtml }) {
     const html = `
       <button class="x" type="button" aria-label="Cerrar">×</button>
       <strong>${esc(title)}</strong>
@@ -539,10 +1110,9 @@ dialog label{margin-top:12px}
       ${summary ? `<div class="t-url">${esc(summary)}</div>` : ""}
       ${body ? `<div style="font-size:.88rem;margin-top:4px">${esc(body)}</div>` : ""}
       ${htmlBody ? `<pre>${htmlBody}</pre>` : ""}
-      ${kind === "changed" ? `<button class="small open" type="button">Abrir página</button>` : ""}
+      ${listHtml ? `<ul class="items">${listHtml}</ul>` : ""}
+      ${kind === "changed" && url ? `<button class="small open" type="button">Abrir página</button>` : ""}
       ${ignoreLabel ? `<button class="small ignore" type="button">${esc(ignoreLabel)}</button>` : ""}`;
-
-    // Se dibuja en esta pestaña y, si está abierta, en la ventana flotante; cerrar uno cierra ambos
     const destinos = [document];
     if (pipWin && !pipWin.closed) destinos.push(pipWin.document);
     const els = [];
@@ -571,8 +1141,51 @@ dialog label{margin-top:12px}
     if (!sticky) setTimeout(close, 6000);
   }
 
-  /* ---------- Ventana flotante (siempre encima) ---------- */
-  let pipWin = null;
+  /* ---------- Sonido ---------- */
+  let actx = null;
+  document.addEventListener("pointerdown", () => {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === "suspended") actx.resume();
+    } catch (_) {}
+  }, { passive: true });
+
+  function beep() {
+    if (!state.settings.sound || !actx) return;
+    try {
+      const t = actx.currentTime;
+      [880, 1318].forEach((f, i) => {
+        const o = actx.createOscillator(), g = actx.createGain(), s = t + i * 0.18;
+        o.type = "sine"; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, s);
+        g.gain.exponentialRampToValueAtTime(0.25, s + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, s + 0.17);
+        o.connect(g).connect(actx.destination);
+        o.start(s); o.stop(s + 0.2);
+      });
+    } catch (_) {}
+  }
+
+  /* ---------- Contador en el icono de la pestaña ---------- */
+  const FAV_BASE = $("#favicon").href;
+  let lastBadge = -1;
+  function updateBadge() {
+    const n = state.monitors.filter(m => m.unseen).length;
+    if (n === lastBadge) return;
+    lastBadge = n;
+    if (!n) { $("#favicon").href = FAV_BASE; return; }
+    const c = document.createElement("canvas");
+    c.width = c.height = 64;
+    const x = c.getContext("2d");
+    x.font = "50px serif"; x.textBaseline = "middle"; x.fillText("🛰️", 0, 34);
+    x.fillStyle = "#D93025";
+    x.beginPath(); x.arc(44, 20, 20, 0, Math.PI * 2); x.fill();
+    x.fillStyle = "#fff"; x.font = "bold 28px sans-serif"; x.textAlign = "center";
+    x.fillText(n > 9 ? "9+" : String(n), 44, 22);
+    $("#favicon").href = c.toDataURL("image/png");
+  }
+
+  /* ---------- Ventana flotante ---------- */
   const PIP_CSS = `
     body{padding:10px;margin:0;font-size:14px}
     #toasts{position:static;width:auto;gap:8px}
@@ -589,14 +1202,12 @@ dialog label{margin-top:12px}
 
   async function abrirPip() {
     if (pipWin && !pipWin.closed) { pipWin.focus(); return; }
-    let win;
+    let win = null;
     if ("documentPictureInPicture" in window) {
-      try { win = await documentPictureInPicture.requestWindow({ width: 360, height: 420 }); }
-      catch (e) { win = null; }
+      try { win = await documentPictureInPicture.requestWindow({ width: 360, height: 420 }); } catch (e) { win = null; }
     }
-    let flotaEncima = !!win;
+    const encima = !!win;
     if (!win) {
-      // Alternativa: ventana emergente normal (no se mantiene encima de otras aplicaciones)
       win = window.open("", "vigia-flotante", "popup,width=380,height=460");
       if (!win) {
         toast({ kind: "error", title: "No se pudo abrir la ventana", body: "Chromium ha bloqueado la ventana emergente. Permite las ventanas emergentes para esta página y vuelve a intentarlo." });
@@ -617,9 +1228,16 @@ dialog label{margin-top:12px}
     win.addEventListener("pagehide", () => { pipWin = null; $("#btnPip").textContent = "Abrir ventana flotante"; });
     $("#btnPip").textContent = "Ventana flotante abierta";
     actualizarPip();
-    toast({ title: "Ventana flotante lista", body: flotaEncima
+    toast({ title: "Ventana flotante lista", body: encima
       ? "Los avisos aparecerán aquí, encima de cualquier otra ventana."
       : "Este navegador no permite ventanas siempre encima; se ha abierto una ventana normal." });
+  }
+
+  function textoCuenta(m, now) {
+    if (m.paused) return "pausa";
+    if (m.busy) return "…";
+    if (!enHorario(m)) return "fuera";
+    return fmtCountdown(Math.max(0, Math.ceil(((m.nextAt || now) - now) / 1000)));
   }
 
   function actualizarPip() {
@@ -627,66 +1245,16 @@ dialog label{margin-top:12px}
     const d = pipWin.document, list = d.getElementById("pipList"), res = d.getElementById("pipResumen");
     if (!list) return;
     const now = Date.now();
-    const activos = state.monitors.filter(m => !m.paused).length;
-    res.textContent = `${activos} de ${state.monitors.length} activas`;
+    res.textContent = `${state.monitors.filter(m => !m.paused).length} de ${state.monitors.length} activas`;
     list.innerHTML = state.monitors.map(m => {
       const st = m.paused ? "paused" : m.status;
-      const c = m.paused ? "en pausa" : m.busy ? "comprobando" : fmtCountdown(Math.max(0, Math.ceil(((m.nextAt || now) - now) / 1000)));
-      return `<li><span class="dot d-${st}"></span><span class="h" title="${esc(m.url)}">${esc(host(m.url))}</span><span class="c">${c}</span></li>`;
+      return `<li><span class="dot d-${st}"></span><span class="h" title="${esc(m.url)}">${esc(host(m.url))}</span><span class="c">${textoCuenta(m, now)}</span></li>`;
     }).join("") || `<li>Sin páginas vigiladas.</li>`;
   }
 
-  $("#btnPip").onclick = abrirPip;
-
-  $("#btnTest").onclick = () => {
-    toast({
-      kind: "changed", sticky: true,
-      title: "Aviso de prueba",
-      url: location.href,
-      summary: "Así se verá un cambio detectado",
-      htmlBody: `<span class="del">− Precio: <mark>24,99</mark> €</span>\n<span class="add">+ Precio: <mark>19,99</mark> €</span>`
-    });
-    beep();
-    if (state.settings.system && "Notification" in window && Notification.permission === "granted") {
-      try { new Notification("Vigía: aviso de prueba", { body: "Las notificaciones del sistema funcionan." }); } catch (_) {}
-    }
-  };
-
-  function mostrarPermiso() {
-    const el = $("#permInfo");
-    if (!("Notification" in window)) { el.textContent = "Notificaciones del sistema: no disponibles en este navegador."; return; }
-    const p = Notification.permission;
-    el.textContent = p === "granted" ? "Notificaciones del sistema: permitidas."
-      : p === "denied" ? "Notificaciones del sistema: bloqueadas (cámbialo en el icono junto a la dirección)."
-      : "Notificaciones del sistema: sin decidir.";
-  }
-  mostrarPermiso();
-
-  let actx = null;
-  document.addEventListener("pointerdown", () => {
-    try {
-      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-      if (actx.state === "suspended") actx.resume();
-    } catch (_) {}
-  }, { once: false, passive: true });
-
-  function beep() {
-    if (!state.settings.sound || !actx) return;
-    try {
-      const t = actx.currentTime;
-      [880, 1318].forEach((f, i) => {
-        const o = actx.createOscillator(), g = actx.createGain(), s = t + i * 0.18;
-        o.type = "sine"; o.frequency.value = f;
-        g.gain.setValueAtTime(0.0001, s);
-        g.gain.exponentialRampToValueAtTime(0.25, s + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, s + 0.17);
-        o.connect(g).connect(actx.destination);
-        o.start(s); o.stop(s + 0.2);
-      });
-    } catch (_) {}
-  }
-
-  /* ---------- Historial ---------- */
+  /* =====================================================================
+     Historial
+     ===================================================================== */
   function addLog(m, kind, text) {
     state.log.unshift({ t: Date.now(), kind, url: m.url, text });
     state.log = state.log.slice(0, 100);
@@ -694,27 +1262,73 @@ dialog label{margin-top:12px}
   }
   function renderLog() {
     const ul = $("#log");
-    if (!state.log.length) { ul.innerHTML = `<li><span style="color:var(--muted)">Aquí aparecerán los cambios detectados.</span></li>`; return; }
+    if (!state.log.length) { ul.innerHTML = `<li><span style="color:var(--muted)">Aquí aparecerán las novedades detectadas.</span></li>`; return; }
     ul.innerHTML = state.log.slice(0, 40).map(l => `
       <li><time>${esc(dt(l.t))}</time>
       <span><span class="k-${l.kind}">${esc(l.text)}</span><br><span style="color:var(--muted);word-break:break-all">${esc(l.url)}</span></span></li>`).join("");
   }
   $("#clearLog").onclick = () => { state.log = []; save(); renderLog(); };
 
-  /* ---------- Lista de monitores ---------- */
+  let histMon = null;
+  function abrirHistorial(m) {
+    histMon = m;
+    $("#h-url").textContent = m.url;
+    const h = m.hist || [];
+    $("#h-list").innerHTML = h.length ? h.map(e => `
+      <div class="hist-item">
+        <strong>${esc(e.titulo)}</strong> <span class="hint">${esc(dt(e.t))}</span>
+        <ul>${e.lineas.map(l => l.href
+          ? `<li><a href="${esc(l.href)}" target="_blank" rel="noopener">${esc(recorta(l.text, 200))}</a></li>`
+          : `<li>${esc(recorta(l.text, 200))}</li>`).join("")}</ul>
+      </div>`).join("") : `<p class="hint">Todavía no hay avisos de esta página.</p>`;
+    $("#histDlg").showModal();
+  }
+  $("#h-close").onclick = () => $("#histDlg").close();
+  $("#h-clear").onclick = () => { if (histMon) { histMon.hist = []; save(); abrirHistorial(histMon); } };
+
+  /* =====================================================================
+     Lista de páginas
+     ===================================================================== */
+  function sparkline(hist) {
+    if (!hist || hist.length < 2) return "";
+    const W = 140, H = 30, vs = hist.map(p => p.v);
+    const min = Math.min(...vs), max = Math.max(...vs), rng = max - min || 1;
+    const pts = vs.map((v, i) => `${(i / (vs.length - 1) * W).toFixed(1)},${(H - (v - min) / rng * H).toFixed(1)}`).join(" ");
+    return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolución: mínimo ${fmtNum(min)}, máximo ${fmtNum(max)}"><polyline class="spark" points="${pts}"/></svg>
+      <span class="hint" style="margin:0">mín. ${esc(fmtNum(min))}, máx. ${esc(fmtNum(max))}</span>`;
+  }
+
   function renderList() {
     const box = $("#list");
     if (!state.monitors.length) {
       box.innerHTML = `<div class="empty">Todavía no vigilas ninguna página. Añade una dirección arriba para empezar.</div>`;
+      updateBadge();
       return;
     }
+    const esOwner = !!owner;
     box.innerHTML = state.monitors.map(m => {
       const status = m.paused ? "paused" : m.status;
-      const opts = [`Cada ${fmtDur(m.interval)}`, m.mode === "html" ? "HTML completo" : "Texto visible"];
+      const w = m.watch || "cambios";
+      const opts = [`Cada ${fmtDur(m.interval)}`];
+      if (m.isFeed) opts.push("feed RSS/Atom, avisa de entradas nuevas");
+      else {
+        opts.push(WATCH_TXT[w]);
+        if (w === "nuevo" || w === "cambios") opts.push(m.mode === "html" ? "HTML completo" : "texto visible");
+      }
+      if (w === "numero") {
+        const frases = { cambio: "avisa si cambia", baja: "avisa si baja", sube: "avisa si sube",
+          menor: `avisa si baja de ${fmtNum(m.numValor)}`, mayor: `avisa si sube de ${fmtNum(m.numValor)}` };
+        opts.push(frases[m.numCond || "cambio"]);
+      }
       if (m.selector) opts.push(`zona: ${m.selector}`);
-      if (m.via) opts.push(`acceso: ${m.via === "direct" ? "directo" : m.via}`);
+      const nKw = palabras(m).length;
+      if (nKw) opts.push(`${nKw} ${nKw === 1 ? "palabra clave" : "palabras clave"}`);
       const nReglas = reglasIgnorar(m).length;
       if (nReglas) opts.push(`${nReglas} ${nReglas === 1 ? "filtro" : "filtros"}`);
+      if (m.hDesde && m.hHasta) opts.push(`de ${m.hDesde} a ${m.hHasta}`);
+      if (m.laborables) opts.push("lunes a viernes");
+      if (m.via) opts.push(`acceso: ${m.via === "direct" ? "directo" : m.via}`);
+      const msg = m.paused ? "En pausa." : !enHorario(m) ? "Fuera del horario de vigilancia." : (m.message || "Esperando la primera comprobación…");
       return `
       <article class="mon" data-status="${status}" data-id="${m.id}">
         <div class="ring" aria-hidden="true">
@@ -725,13 +1339,17 @@ dialog label{margin-top:12px}
         </div>
         <div>
           <a class="url" href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.url)}</a>
-          ${m.changes ? `<span class="badge">${m.changes} ${m.changes === 1 ? "cambio" : "cambios"}</span>` : ""}
+          ${m.changes ? `<span class="badge">${m.changes} ${m.changes === 1 ? "aviso" : "avisos"}</span>` : ""}
+          ${esOwner && m.cloud ? `<span class="badge cloud">GitHub</span>` : ""}
           <div class="meta">${esc(opts.join(", "))}</div>
-          <div class="meta">Última comprobación: ${esc(hms(m.lastCheck))}. Último cambio: ${esc(dt(m.lastChange))}.</div>
-          <p class="msg ${m.status === "error" ? "err" : ""}">${m.paused ? "En pausa." : esc(m.message || "Esperando la primera comprobación…")}</p>
+          <div class="meta">Última comprobación: ${esc(hms(m.lastCheck))}. Último aviso: ${esc(dt(m.lastChange))}.</div>
+          ${w === "numero" && m.numero != null ? `<div class="numero"><b>${esc(fmtNum(m.numero))}</b>${sparkline(m.numHist)}</div>` : ""}
+          ${m.feedUrl && !m.isFeed && w !== "numero" ? `<p class="feedtip">Esta página publica un feed RSS, que es la forma más fiable de enterarse de novedades.<button class="small" type="button" data-act="feed">Vigilar el feed</button></p>` : ""}
+          <p class="msg ${m.status === "error" && !m.paused ? "err" : ""}">${esc(msg)}</p>
           <div class="actions">
             <button class="small" type="button" data-act="now" ${m.busy ? "disabled" : ""}>Comprobar ahora</button>
             <button class="small" type="button" data-act="edit">Ajustes</button>
+            <button class="small" type="button" data-act="hist">Historial${m.hist && m.hist.length ? ` (${m.hist.length})` : ""}</button>
             <button class="small" type="button" data-act="pause">${m.paused ? "Reanudar" : "Pausar"}</button>
             <button class="small" type="button" data-act="reset" title="Toma la versión actual como nueva referencia">Reiniciar referencia</button>
             <button class="small danger" type="button" data-act="del">Quitar</button>
@@ -740,6 +1358,7 @@ dialog label{margin-top:12px}
       </article>`;
     }).join("");
     updateRings();
+    updateBadge();
   }
 
   $("#list").addEventListener("click", e => {
@@ -750,35 +1369,152 @@ dialog label{margin-top:12px}
     switch (btn.dataset.act) {
       case "now": m.unseen = false; check(m); break;
       case "edit": abrirAjustes(m); break;
+      case "hist": abrirHistorial(m); break;
+      case "feed":
+        Object.assign(m, { url: m.feedUrl, feedUrl: null, watch: "nuevo", selector: "", via: null,
+          seen: null, hash: null, lines: null, changes: 0, unseen: false, status: "idle",
+          message: "Cambiado al feed. Guardando referencia…" });
+        marcarGhPendiente(m);
+        check(m); break;
       case "pause":
         m.paused = !m.paused;
         if (!m.paused) m.nextAt = Date.now();
         save(); renderList(); break;
       case "reset":
-        m.hash = null; m.lines = null; m.changes = 0; m.unseen = false; m.status = "idle";
-        m.message = "Referencia borrada. Se tomará una nueva ahora.";
+        Object.assign(m, { hash: null, lines: null, seen: null, numero: null, changes: 0, unseen: false, status: "idle",
+          message: "Referencia borrada. Se tomará una nueva ahora." });
         check(m); break;
       case "del":
         if (confirm(`¿Dejar de vigilar ${m.url}?`)) {
           state.monitors = state.monitors.filter(x => x !== m);
+          marcarGhPendiente(m);
           save(); renderList();
         }
         break;
     }
   });
 
+  function updateRings() {
+    const now = Date.now();
+    state.monitors.forEach(m => {
+      const el = document.querySelector(`.mon[data-id="${m.id}"]`);
+      if (!el) return;
+      const bar = el.querySelector(".bar"), txt = el.querySelector("[data-count]");
+      txt.textContent = textoCuenta(m, now);
+      if (m.paused || !enHorario(m)) { bar.style.strokeDashoffset = RING_C; return; }
+      if (m.busy) { bar.style.strokeDashoffset = RING_C * 0.7; return; }
+      const left = Math.max(0, Math.ceil(((m.nextAt || now) - now) / 1000));
+      const frac = 1 - left / m.interval;
+      bar.style.strokeDashoffset = RING_C * (1 - Math.min(1, Math.max(0, frac)));
+    });
+    actualizarPip();
+  }
+
+  /* =====================================================================
+     Bucle principal
+     ===================================================================== */
+  const horarioPrevio = new Map();
+  function tick() {
+    const now = Date.now();
+    state.monitors.forEach(m => {
+      const dentro = enHorario(m);
+      if (horarioPrevio.has(m.id) && horarioPrevio.get(m.id) !== dentro) renderList();
+      horarioPrevio.set(m.id, dentro);
+      if (!m.paused && !m.busy && dentro && now >= (m.nextAt || 0)) check(m);
+    });
+    if (state.settings.repeat && state.settings.sound && !enSilencio()
+        && state.monitors.some(m => m.unseen) && now - lastRepeat >= 30000) {
+      lastRepeat = now;
+      beep();
+    }
+    updateRings();
+  }
+  setInterval(tick, 1000);
+
+  /* =====================================================================
+     Alta de páginas
+     ===================================================================== */
+  function mostrarOpcionesWatch(watchSel, cont) {
+    cont.querySelectorAll(".numOpts").forEach(el => el.classList.toggle("hidden", watchSel.value !== "numero"));
+  }
+  const pintarHint = () => {
+    $("#watchHint").textContent = WATCH_HINT[$("#watch").value] +
+      ($("#watch").value === "numero" ? "" : " Si la dirección es un feed RSS o Atom, se detecta sola y avisa de cada entrada nueva.");
+    mostrarOpcionesWatch($("#watch"), $("#addForm"));
+  };
+  $("#watch").addEventListener("change", pintarHint);
+  pintarHint();
+
+  $("#interval").addEventListener("change", e => {
+    $("#customBox").classList.toggle("hidden", e.target.value !== "custom");
+  });
+
+  function normalizarUrl(url) {
+    url = url.trim();
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    new URL(url);
+    return url;
+  }
+
+  $("#addForm").addEventListener("submit", e => {
+    e.preventDefault();
+    let url;
+    try { url = normalizarUrl($("#url").value); }
+    catch { toast({ kind: "error", title: "Dirección no válida", body: "Escribe una URL completa, por ejemplo https://ejemplo.com" }); return; }
+
+    const interval = $("#interval").value === "custom"
+      ? Math.round(Number($("#customVal").value) * Number($("#customUnit").value))
+      : Number($("#interval").value);
+    if (!interval || interval < 10) { toast({ kind: "error", title: "Intervalo demasiado corto", body: "El mínimo es 10 segundos." }); return; }
+
+    const watch = $("#watch").value;
+    const selector = (watch === "numero" ? $("#numSelector").value : $("#selector").value).trim();
+    if (watch === "numero" && !selector) {
+      toast({ kind: "error", title: "Falta el selector del número", body: "Indica el selector CSS del precio o cifra, por ejemplo .precio" });
+      return;
+    }
+    const m = {
+      id: uid(), url, interval, watch, selector,
+      mode: $("#mode").value, proxy: $("#proxy").value,
+      ignore: $("#ignore").value, keywords: $("#keywords").value, random: $("#random").checked,
+      numCond: $("#numCond").value, numValor: $("#numValor").value,
+      movil: true, cloud: false,
+      normVersion: NORM_VERSION, paused: false, changes: 0,
+      status: "idle", message: "", nextAt: Date.now(), createdAt: Date.now()
+    };
+    state.monitors.unshift(m);
+    save(); renderList();
+    $("#url").value = "";
+    toast({ title: "Vigilando", url, body: `Se comprobará cada ${fmtDur(interval)}.` });
+    check(m);
+  });
+
+  /* =====================================================================
+     Ajustes de una página
+     ===================================================================== */
   let editando = null;
   function abrirAjustes(m) {
     editando = m;
     $("#e-url").textContent = m.url;
     $("#e-interval").value = m.interval;
-    $("#e-mode").value = m.mode;
+    $("#e-watch").value = m.watch || "cambios";
+    $("#e-mode").value = m.mode || "text";
     $("#e-selector").value = m.selector || "";
-    $("#e-proxy").value = m.proxy;
+    $("#e-proxy").value = m.proxy || "auto";
     $("#e-ignore").value = m.ignore || "";
+    $("#e-keywords").value = m.keywords || "";
     $("#e-random").checked = m.random !== false;
+    $("#e-numCond").value = m.numCond || "cambio";
+    $("#e-numValor").value = m.numValor ?? "";
+    $("#e-hDesde").value = m.hDesde || "";
+    $("#e-hHasta").value = m.hHasta || "";
+    $("#e-laborables").checked = !!m.laborables;
+    $("#e-movil").checked = m.movil !== false;
+    $("#e-cloud").checked = !!m.cloud;
+    mostrarOpcionesWatch($("#e-watch"), $("#editForm"));
     $("#editDlg").showModal();
   }
+  $("#e-watch").addEventListener("change", () => mostrarOpcionesWatch($("#e-watch"), $("#editForm")));
   $("#e-cancel").onclick = () => $("#editDlg").close();
   $("#editForm").addEventListener("submit", e => {
     const m = editando;
@@ -789,92 +1525,122 @@ dialog label{margin-top:12px}
       toast({ kind: "error", title: "Intervalo demasiado corto", body: "El mínimo es 10 segundos." });
       return;
     }
+    if ($("#e-watch").value === "numero" && !$("#e-selector").value.trim()) {
+      e.preventDefault();
+      toast({ kind: "error", title: "Falta el selector del número", body: "Indica en «Solo esta parte» el selector CSS del precio o cifra." });
+      return;
+    }
     const cambiaAcceso = m.proxy !== $("#e-proxy").value;
+    const antesCloud = !!m.cloud;
     Object.assign(m, {
       interval: iv,
+      watch: $("#e-watch").value,
       mode: $("#e-mode").value,
       selector: $("#e-selector").value.trim(),
       proxy: $("#e-proxy").value,
       ignore: $("#e-ignore").value,
+      keywords: $("#e-keywords").value,
       random: $("#e-random").checked,
-      rebase: true, unseen: false
+      numCond: $("#e-numCond").value,
+      numValor: $("#e-numValor").value,
+      hDesde: $("#e-hDesde").value,
+      hHasta: $("#e-hHasta").value,
+      laborables: $("#e-laborables").checked,
+      movil: $("#e-movil").checked,
+      cloud: owner ? $("#e-cloud").checked : m.cloud,
+      rebase: true, unseen: false, fails: 0
     });
     if (cambiaAcceso) m.via = null;
     if (m.status === "changed") m.status = "ok";
     m.nextAt = Date.now();
     editando = null;
+    marcarGhPendiente(m, antesCloud);
     save(); renderList();
     toast({ title: "Ajustes guardados", url: m.url, body: "Se tomará una nueva referencia ahora." });
   });
 
-  function updateRings() {
-    const now = Date.now();
-    state.monitors.forEach(m => {
-      const el = document.querySelector(`.mon[data-id="${m.id}"]`);
-      if (!el) return;
-      const bar = el.querySelector(".bar"), txt = el.querySelector("[data-count]");
-      if (m.paused) { txt.textContent = "❚❚"; bar.style.strokeDashoffset = RING_C; return; }
-      if (m.busy) { txt.textContent = "…"; bar.style.strokeDashoffset = RING_C * 0.7; return; }
-      const left = Math.max(0, Math.ceil(((m.nextAt || now) - now) / 1000));
-      txt.textContent = fmtCountdown(left);
-      const frac = 1 - left / m.interval;
-      bar.style.strokeDashoffset = RING_C * (1 - Math.min(1, Math.max(0, frac)));
-    });
-    actualizarPip();
+  /* =====================================================================
+     Opciones generales y móvil
+     ===================================================================== */
+  const S = state.settings;
+  $("#optSound").checked = S.sound;
+  $("#optRepeat").checked = S.repeat;
+  $("#optSystem").checked = S.system && "Notification" in window && Notification.permission === "granted";
+  $("#tgOn").checked = S.tg.on; $("#tgToken").value = S.tg.token; $("#tgChat").value = S.tg.chat;
+  $("#ntfyOn").checked = S.ntfy.on; $("#ntfyTopic").value = S.ntfy.topic; $("#ntfyServer").value = S.ntfy.server;
+  $("#quietOn").checked = S.quiet.on; $("#quietDesde").value = S.quiet.desde; $("#quietHasta").value = S.quiet.hasta;
+  $("#proxyPropio").value = S.proxyPropio;
+  $("#exportSecrets").checked = S.exportSecrets;
+
+  const enlazar = (sel, fn, ev = "change") => $(sel).addEventListener(ev, e => { fn(e.target); save(); });
+  enlazar("#optSound", t => { S.sound = t.checked; if (t.checked) setTimeout(beep, 50); });
+  enlazar("#optRepeat", t => { S.repeat = t.checked; });
+  enlazar("#tgOn", t => { S.tg.on = t.checked; });
+  enlazar("#tgToken", t => { S.tg.token = t.value.trim(); }, "input");
+  enlazar("#tgChat", t => { S.tg.chat = t.value.trim(); }, "input");
+  enlazar("#ntfyOn", t => { S.ntfy.on = t.checked; });
+  enlazar("#ntfyTopic", t => { S.ntfy.topic = t.value.trim(); }, "input");
+  enlazar("#ntfyServer", t => { S.ntfy.server = t.value.trim() || "https://ntfy.sh"; }, "input");
+  enlazar("#quietOn", t => { S.quiet.on = t.checked; });
+  enlazar("#quietDesde", t => { S.quiet.desde = t.value; });
+  enlazar("#quietHasta", t => { S.quiet.hasta = t.value; });
+  enlazar("#exportSecrets", t => { S.exportSecrets = t.checked; });
+  enlazar("#proxyPropio", t => {
+    S.proxyPropio = t.value.trim();
+    if (S.proxyPropio && !S.proxyPropio.includes("{url}")) toast({ kind: "error", title: "Falta {url}", body: "La dirección del proxy debe incluir {url} donde va la página a leer." });
+  });
+
+  async function conBoton(btn, fn) {
+    btn.disabled = true;
+    try { await fn(); } finally { btn.disabled = false; }
   }
 
-  /* ---------- Bucle principal ---------- */
-  function tick() {
-    const now = Date.now();
-    state.monitors.forEach(m => {
-      if (!m.paused && !m.busy && now >= (m.nextAt || 0)) check(m);
-    });
-    updateRings();
-  }
-  setInterval(tick, 1000);
-
-  /* ---------- Formulario ---------- */
-  $("#interval").addEventListener("change", e => {
-    $("#customBox").classList.toggle("hidden", e.target.value !== "custom");
+  $("#tgDetect").onclick = e => conBoton(e.target, async () => {
+    const token = $("#tgToken").value.trim();
+    if (!token) { toast({ kind: "error", title: "Falta el token del bot" }); return; }
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${token}/getUpdates`);
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.description || `error ${r.status}`);
+      const upd = [...j.result].reverse().find(u => (u.message || u.channel_post || u.my_chat_member || u.edited_message));
+      const src = upd && (upd.message || upd.channel_post || upd.my_chat_member || upd.edited_message);
+      const chat = src && src.chat;
+      if (!chat) throw new Error("No hay mensajes recientes. Envía cualquier mensaje a tu bot y vuelve a pulsar.");
+      $("#tgChat").value = S.tg.chat = String(chat.id);
+      S.tg.token = token;
+      save();
+      toast({ title: "Chat ID detectado", body: `${chat.first_name || chat.title || ""} (${chat.id}). Ya puedes enviar una prueba.` });
+    } catch (err) {
+      toast({ kind: "error", title: "No se pudo detectar", body: "Telegram: " + err.message });
+    }
   });
 
-  $("#addForm").addEventListener("submit", e => {
-    e.preventDefault();
-    let url = $("#url").value.trim();
-    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
-    try { new URL(url); } catch { toast({ kind: "error", title: "Dirección no válida", body: "Escribe una URL completa, por ejemplo https://ejemplo.com" }); return; }
-
-    let interval = $("#interval").value === "custom"
-      ? Math.round(Number($("#customVal").value) * Number($("#customUnit").value))
-      : Number($("#interval").value);
-    if (!interval || interval < 10) { toast({ kind: "error", title: "Intervalo demasiado corto", body: "El mínimo es 10 segundos." }); return; }
-
-    const m = {
-      id: uid(), url, interval,
-      mode: $("#mode").value,
-      selector: $("#selector").value.trim(),
-      proxy: $("#proxy").value,
-      ignore: $("#ignore").value,
-      random: $("#random").checked,
-      normVersion: NORM_VERSION,
-      paused: false, hash: null, lines: null, changes: 0,
-      status: "idle", message: "", nextAt: Date.now(), createdAt: Date.now()
-    };
-    state.monitors.unshift(m);
-    save(); renderList();
-    $("#url").value = "";
-    toast({ title: "Vigilando", url, body: `Se comprobará cada ${fmtDur(interval)}.` });
-    check(m);
+  $("#tgTest").onclick = e => conBoton(e.target, async () => {
+    try {
+      await enviarTelegram($("#tgToken").value.trim(), $("#tgChat").value.trim(), {
+        titulo: "Vigía: mensaje de prueba", lineas: [{ text: "Los avisos por Telegram funcionan." }], url: location.href.split("#")[0]
+      });
+      toast({ title: "Prueba enviada", body: "Revisa Telegram." });
+    } catch (err) { toast({ kind: "error", title: "No se pudo enviar", body: err.message }); }
   });
 
-  /* ---------- Opciones ---------- */
-  $("#optSound").checked = state.settings.sound;
-  $("#optSystem").checked = state.settings.system && "Notification" in window && Notification.permission === "granted";
-
-  $("#optSound").addEventListener("change", e => {
-    state.settings.sound = e.target.checked; save();
-    if (e.target.checked) setTimeout(beep, 50);
+  $("#ntfyTest").onclick = e => conBoton(e.target, async () => {
+    const topic = $("#ntfyTopic").value.trim();
+    if (!topic) { toast({ kind: "error", title: "Falta el tema de ntfy" }); return; }
+    try {
+      await enviarNtfy($("#ntfyServer").value.trim(), topic, {
+        titulo: "Vigía: mensaje de prueba", lineas: [{ text: "Los avisos por ntfy funcionan." }], url: location.href.split("#")[0]
+      });
+      toast({ title: "Prueba enviada", body: "Revisa la app de ntfy." });
+    } catch (err) { toast({ kind: "error", title: "No se pudo enviar", body: err.message }); }
   });
+
+  $("#ntfyRandom").onclick = () => {
+    const bytes = crypto.getRandomValues(new Uint8Array(9));
+    const t = "vigia-" + [...bytes].map(b => b.toString(36).padStart(2, "0")).join("").slice(0, 16);
+    $("#ntfyTopic").value = S.ntfy.topic = t;
+    save();
+  };
 
   $("#optSystem").addEventListener("change", async e => {
     if (e.target.checked) {
@@ -888,17 +1654,295 @@ dialog label{margin-top:12px}
       if (p !== "granted") {
         e.target.checked = false;
         mostrarPermiso();
-        toast({ kind: "error", title: "Permiso no concedido", body: "Actívalo desde el icono del candado en la barra de direcciones. En archivos locales (file://) Chromium puede bloquearlo: usa GitHub Pages o localhost." });
+        toast({ kind: "error", title: "Permiso no concedido", body: "Actívalo desde el icono junto a la dirección. En archivos locales (file://) Chromium puede bloquearlo: usa GitHub Pages o localhost." });
         return;
       }
       new Notification("Vigía", { body: "Las notificaciones del sistema están activadas." });
     }
-    state.settings.system = e.target.checked; save();
+    S.system = e.target.checked; save();
     mostrarPermiso();
   });
 
-  renderList();
+  function mostrarPermiso() {
+    const el = $("#permInfo");
+    if (!("Notification" in window)) { el.textContent = "Notificaciones del sistema: no disponibles en este navegador."; return; }
+    const p = Notification.permission;
+    el.textContent = p === "granted" ? "Notificaciones del sistema: permitidas."
+      : p === "denied" ? "Notificaciones del sistema: bloqueadas (cámbialo en el icono junto a la dirección)."
+      : "Notificaciones del sistema: sin decidir.";
+  }
+  mostrarPermiso();
+
+  $("#btnPip").onclick = abrirPip;
+  $("#btnTest").onclick = () => {
+    toast({
+      kind: "changed", sticky: true, title: "Aviso de prueba", url: location.href.split("#")[0],
+      summary: "Así se verá una novedad",
+      listHtml: `<li><a href="#" onclick="return false">Nueva convocatoria publicada</a></li><li>Actualizado el horario de atención</li>`
+    });
+    lastRepeat = Date.now();
+    beep();
+    if (S.system && "Notification" in window && Notification.permission === "granted") {
+      try { new Notification("Vigía: aviso de prueba", { body: "Las notificaciones del sistema funcionan." }); } catch (_) {}
+    }
+    const moviles = (S.tg.on && S.tg.token && S.tg.chat) || (S.ntfy.on && S.ntfy.topic);
+    if (moviles) enviarMovil({ titulo: "Vigía: aviso de prueba", lineas: [{ text: "Nueva convocatoria publicada" }], url: location.href.split("#")[0] });
+  };
+
+  /* =====================================================================
+     Exportar e importar
+     ===================================================================== */
+  const CAMPOS_CONFIG = ["id", "url", "interval", "watch", "mode", "selector", "proxy", "ignore", "keywords", "random",
+    "numCond", "numValor", "hDesde", "hHasta", "laborables", "movil", "cloud", "paused"];
+  const pick = (o, campos) => Object.fromEntries(campos.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
+
+  $("#btnExport").onclick = () => {
+    const settings = pick(S, ["sound", "repeat", "system", "quiet", "proxyPropio"]);
+    if (S.exportSecrets) { settings.tg = S.tg; settings.ntfy = S.ntfy; }
+    else settings.ntfy = { server: S.ntfy.server };
+    const data = { app: "vigia", version: 1, exportado: new Date().toISOString(),
+      monitors: state.monitors.map(m => pick(m, CAMPOS_CONFIG)), settings };
+    descargar(`vigia-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(data, null, 2));
+    toast({ title: "Configuración exportada", body: `${data.monitors.length} páginas${S.exportSecrets ? ", con datos de Telegram y ntfy" : ""}.` });
+  };
+
+  $("#btnImport").onclick = () => $("#importFile").click();
+  $("#importFile").addEventListener("change", async e => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      if (data.app !== "vigia" || !Array.isArray(data.monitors)) throw new Error("El archivo no es una exportación de Vigía.");
+      const existentes = new Set(state.monitors.map(m => `${m.url}|${m.watch || "cambios"}|${m.selector || ""}`));
+      let nuevas = 0;
+      data.monitors.forEach(src => {
+        if (!src.url) return;
+        const clave = `${src.url}|${src.watch || "cambios"}|${src.selector || ""}`;
+        if (existentes.has(clave)) return;
+        existentes.add(clave);
+        const m = Object.assign({ interval: 300, watch: "nuevo", mode: "text", proxy: "auto", random: true, movil: true },
+          pick(src, CAMPOS_CONFIG));
+        m.id = state.monitors.some(x => x.id === m.id) || !m.id ? uid() : m.id;
+        m.interval = Math.max(10, Number(m.interval) || 300);
+        Object.assign(m, { status: "idle", message: "", changes: 0, normVersion: NORM_VERSION, nextAt: Date.now() + nuevas * 1500, createdAt: Date.now() });
+        state.monitors.push(m);
+        nuevas++;
+      });
+      if (data.settings) {
+        const d = data.settings;
+        ["sound", "repeat", "proxyPropio"].forEach(k => { if (d[k] !== undefined) S[k] = d[k]; });
+        if (d.quiet) Object.assign(S.quiet, d.quiet);
+        if (d.tg && d.tg.token) Object.assign(S.tg, d.tg);
+        if (d.ntfy) Object.assign(S.ntfy, d.ntfy);
+      }
+      save();
+      renderList();
+      recargarOpciones();
+      toast({ title: "Configuración importada", body: `${nuevas} páginas nuevas${data.monitors.length - nuevas ? `, ${data.monitors.length - nuevas} ya existían` : ""}.` });
+    } catch (err) {
+      toast({ kind: "error", title: "No se pudo importar", body: err.message });
+    }
+  });
+
+  function recargarOpciones() {
+    $("#optSound").checked = S.sound; $("#optRepeat").checked = S.repeat;
+    $("#tgOn").checked = S.tg.on; $("#tgToken").value = S.tg.token; $("#tgChat").value = S.tg.chat;
+    $("#ntfyOn").checked = S.ntfy.on; $("#ntfyTopic").value = S.ntfy.topic; $("#ntfyServer").value = S.ntfy.server;
+    $("#quietOn").checked = S.quiet.on; $("#quietDesde").value = S.quiet.desde; $("#quietHasta").value = S.quiet.hasta;
+    $("#proxyPropio").value = S.proxyPropio;
+  }
+
+  /* =====================================================================
+     GitHub Actions: solo para el propietario
+     ===================================================================== */
+  const WORKFLOW = "vigia.yml";
+
+  function propietarioEsperado() {
+    if (PROPIETARIO_GITHUB) return PROPIETARIO_GITHUB.toLowerCase();
+    return location.hostname.endsWith(".github.io") ? location.hostname.replace(/\.github\.io$/i, "").toLowerCase() : "";
+  }
+  function repoPorDefecto() {
+    const dueño = propietarioEsperado();
+    if (!location.hostname.endsWith(".github.io")) return "";
+    const primero = location.pathname.split("/").filter(Boolean)[0];
+    const esArchivo = primero && /\.[a-z0-9]+$/i.test(primero);
+    return `${dueño}/${primero && !esArchivo ? primero : `${dueño}.github.io`}`;
+  }
+
+  async function gh(path, { method = "GET", body, token = owner && owner.token } = {}) {
+    const res = await fetch("https://api.github.com" + path, {
+      method,
+      headers: { "Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
+      body: body ? JSON.stringify(body) : undefined,
+      cache: "no-store"
+    });
+    if (!res.ok) {
+      let msg = "";
+      try { msg = (await res.json()).message || ""; } catch {}
+      const err = new Error(`GitHub ${res.status}${msg ? `: ${msg}` : ""}`);
+      err.status = res.status;
+      throw err;
+    }
+    return res.status === 204 ? null : res.json();
+  }
+
+  function mostrarPanelOwner() {
+    const activo = !!owner;
+    $("#ghSection").hidden = !activo;
+    document.querySelectorAll(".ownerOnly").forEach(el => el.classList.toggle("hidden", !activo));
+    if (activo) {
+      $("#ghLogin").textContent = owner.login;
+      $("#ghRepo").textContent = owner.repo;
+      pintarPendiente();
+    }
+    renderList();
+  }
+
+  function abrirOwnerDlg() {
+    if (owner) { $("#ghSection").scrollIntoView({ behavior: "smooth" }); return; }
+    if (!propietarioEsperado()) {
+      toast({ kind: "error", title: "Acceso de propietario no disponible", body: "Abre Vigía desde tu GitHub Pages o escribe tu usuario en PROPIETARIO_GITHUB dentro del código." });
+      return;
+    }
+    $("#o-repo").value = repoPorDefecto();
+    $("#o-repo").placeholder = `${propietarioEsperado()}/nombre-del-repositorio`;
+    $("#o-token").value = "";
+    $("#o-estado").textContent = "";
+    $("#ownerDlg").showModal();
+  }
+  $("#o-cancel").onclick = () => { $("#ownerDlg").close(); history.replaceState(null, "", location.pathname + location.search); };
+
+  $("#ownerForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const token = $("#o-token").value.trim();
+    const repo = $("#o-repo").value.trim().replace(/^https:\/\/github\.com\//, "").replace(/\/+$/, "");
+    const est = $("#o-estado");
+    est.className = "hint";
+    if (!token || !/^[^/]+\/[^/]+$/.test(repo)) { est.textContent = "Escribe el repositorio como usuario/repositorio y pega el token."; return; }
+    $("#o-ok").disabled = true;
+    est.textContent = "Verificando con GitHub…";
+    try {
+      const esperado = propietarioEsperado();
+      const yo = await gh("/user", { token });
+      if (yo.login.toLowerCase() !== esperado) throw new Error("Este token no pertenece al propietario de esta página.");
+      if (repo.split("/")[0].toLowerCase() !== esperado) throw new Error("El repositorio debe ser del propietario de esta página.");
+      const r = await gh(`/repos/${repo}`, { token });
+      if (!r.permissions || !(r.permissions.admin || r.permissions.push)) throw new Error("El token no tiene permiso de escritura en ese repositorio.");
+      owner = { token, login: yo.login, repo: r.full_name, branch: r.default_branch };
+      localStorage.setItem(OWNER_KEY, JSON.stringify(owner));
+      $("#ownerDlg").close();
+      history.replaceState(null, "", location.pathname + location.search);
+      mostrarPanelOwner();
+      toast({ title: "Acceso de propietario activado", body: `Hola, ${yo.login}. Ya puedes marcar páginas para GitHub Actions.` });
+      verEjecuciones();
+    } catch (err) {
+      est.className = "hint err-txt";
+      est.textContent = err.status === 401 ? "El token no es válido o ha caducado."
+        : err.status === 404 ? "No se encuentra el repositorio o el token no tiene acceso a él."
+        : err.message;
+    } finally {
+      $("#o-ok").disabled = false;
+    }
+  });
+
+  function marcarGhPendiente(m, antes = false) {
+    if (owner && m && (m.cloud || antes)) {
+      localStorage.setItem(OWNER_KEY + ":pendiente", "1");
+      pintarPendiente();
+    }
+  }
+  function pintarPendiente() {
+    if (!owner) return;
+    const pend = localStorage.getItem(OWNER_KEY + ":pendiente") === "1";
+    const n = state.monitors.filter(m => m.cloud).length;
+    const est = $("#ghEstado");
+    est.className = pend ? "hint err-txt" : "hint";
+    est.textContent = `${n} ${n === 1 ? "página marcada" : "páginas marcadas"} para GitHub.` +
+      (pend ? " Hay cambios sin enviar: pulsa «Enviar lista a GitHub»." : "");
+  }
+
+  async function ponerVariable(nombre, valor) {
+    try {
+      await gh(`/repos/${owner.repo}/actions/variables/${nombre}`, { method: "PATCH", body: { name: nombre, value: valor } });
+    } catch (err) {
+      if (err.status !== 404) throw err;
+      await gh(`/repos/${owner.repo}/actions/variables`, { method: "POST", body: { name: nombre, value: valor } });
+    }
+  }
+
+  function errorGh(err, accion) {
+    const pistas = {
+      401: "El token no es válido o ha caducado. Pulsa «Desconectar» y vuelve a entrar con #propietario.",
+      403: "Al token le falta un permiso: necesita «Actions: Read and write» y «Variables: Read and write».",
+      404: "No se encuentra el workflow. Sube .github/workflows/vigia.yml al repositorio (rama principal)."
+    };
+    toast({ kind: "error", title: `No se pudo ${accion}`, body: `${pistas[err.status] || ""} ${err.message}`.trim() });
+  }
+
+  $("#ghSync").onclick = e => conBoton(e.target, async () => {
+    const zona = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const monitors = state.monitors.filter(m => m.cloud && !m.paused).map(m => Object.assign(
+      pick(m, ["id", "url", "interval", "watch", "mode", "selector", "ignore", "keywords", "random", "numCond", "numValor", "hDesde", "hHasta", "laborables"]),
+      { zona }));
+    const valor = JSON.stringify({ version: 1, actualizado: new Date().toISOString(), monitors });
+    if (valor.length > 47000) { toast({ kind: "error", title: "Lista demasiado grande", body: "GitHub admite hasta 48 KB por variable. Reduce filtros o páginas." }); return; }
+    try {
+      await ponerVariable("VIGIA_CONFIG", valor);
+      await ponerVariable("VIGIA_ACTIVO", monitors.length ? "true" : "false");
+      localStorage.removeItem(OWNER_KEY + ":pendiente");
+      pintarPendiente();
+      toast({ title: "Lista enviada a GitHub", body: monitors.length
+        ? `${monitors.length} ${monitors.length === 1 ? "página" : "páginas"}. El workflow las comprobará en su próxima ejecución.`
+        : "No hay páginas marcadas, así que el workflow queda desactivado." });
+    } catch (err) { errorGh(err, "enviar la lista"); }
+  });
+
+  $("#ghRun").onclick = e => conBoton(e.target, async () => {
+    try {
+      await gh(`/repos/${owner.repo}/actions/workflows/${WORKFLOW}/dispatches`, { method: "POST", body: { ref: owner.branch || "main" } });
+      toast({ title: "Ejecución solicitada", body: "Tardará unos segundos en aparecer en la lista." });
+      setTimeout(verEjecuciones, 6000);
+    } catch (err) { errorGh(err, "lanzar el workflow"); }
+  });
+
+  async function verEjecuciones() {
+    if (!owner) return;
+    const ul = $("#ghRuns");
+    ul.innerHTML = `<li><span class="hint">Consultando…</span></li>`;
+    try {
+      const r = await gh(`/repos/${owner.repo}/actions/workflows/${WORKFLOW}/runs?per_page=6`);
+      const estados = { success: "correcta", failure: "con errores", cancelled: "cancelada", skipped: "omitida (¿falta VIGIA_ACTIVO?)" };
+      ul.innerHTML = r.workflow_runs.length ? r.workflow_runs.map(w => `
+        <li><time>${esc(dt(new Date(w.created_at).getTime()))}</time>
+        <span><a href="${esc(w.html_url)}" target="_blank" rel="noopener">${esc(w.status === "completed" ? `Ejecución ${estados[w.conclusion] || w.conclusion}` : "En curso…")}</a>
+        <span class="hint">(${esc(w.event === "schedule" ? "programada" : w.event === "workflow_dispatch" ? "manual" : w.event)})</span></span></li>`).join("")
+        : `<li><span class="hint">Todavía no hay ejecuciones.</span></li>`;
+    } catch (err) {
+      ul.innerHTML = "";
+      errorGh(err, "consultar las ejecuciones");
+    }
+  }
+  $("#ghRefresh").onclick = e => conBoton(e.target, verEjecuciones);
+
+  $("#ghLogout").onclick = () => {
+    if (!confirm("¿Desconectar el acceso de propietario en este navegador? Lo que ya está en GitHub seguirá funcionando.")) return;
+    owner = null;
+    localStorage.removeItem(OWNER_KEY);
+    mostrarPanelOwner();
+    toast({ title: "Desconectado", body: "El token se ha borrado de este navegador." });
+  };
+
+  const revisarHash = () => { if (location.hash === "#propietario") abrirOwnerDlg(); };
+  window.addEventListener("hashchange", revisarHash);
+
+  /* =====================================================================
+     Inicio
+     ===================================================================== */
+  mostrarPanelOwner();
   renderLog();
+  revisarHash();
+  if (owner) verEjecuciones();
 })();
 </script>
 </body>
