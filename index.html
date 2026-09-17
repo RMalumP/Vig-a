@@ -54,6 +54,19 @@ button.danger{color:var(--err)}
 details{margin-top:14px}
 summary{cursor:pointer;color:var(--muted);font-size:.9rem}
 details .row{margin-top:12px}
+details.fold{margin-top:0}
+details.fold > summary{list-style:none;display:flex;align-items:center;gap:10px;color:var(--ink);font-family:var(--display);font-weight:600;font-size:1.35rem;padding:12px 16px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+details.fold > summary::-webkit-details-marker{display:none}
+details.fold > summary::before{content:"";width:9px;height:9px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);transition:transform .15s;flex:0 0 auto}
+details.fold[open] > summary::before{transform:rotate(45deg)}
+details.fold > summary:hover{border-color:var(--muted)}
+details.fold[open] > summary{border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom-color:transparent}
+details.fold > .panel,details.fold > .fold-body{border-top-left-radius:0;border-top-right-radius:0;border-top:0}
+details.fold > .panel{padding-top:4px}
+details.fold > .panel > .sub:first-child > h3{margin-top:10px}
+details.fold > .fold-body{background:var(--panel);border:1px solid var(--line);border-top:0;border-radius:0 0 14px 14px;padding:4px 20px 16px}
+.fold-sub{font-family:var(--font);font-weight:400;font-size:.85rem;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){details.fold > summary::before{transition:none}}
 .hint{font-size:.82rem;color:var(--muted);margin:6px 0 0}
 .ok-txt{color:var(--ok)} .err-txt{color:var(--err)}
 label.check{display:flex;gap:8px;align-items:center;color:var(--ink);font-size:.92rem;margin-top:10px;cursor:pointer;font-weight:400}
@@ -108,7 +121,7 @@ dialog h2{margin-bottom:4px}
 .hist-item{border-top:1px solid var(--line);padding:10px 0}
 .hist-item ul{margin:4px 0 0;padding-left:18px;font-size:.88rem}
 .notes{font-size:.9rem;color:var(--muted)}
-.notes p{margin:0 0 10px;max-width:70ch}
+.notes p{margin:12px 0 0;max-width:70ch}
 ol.steps{padding-left:1.2em;font-size:.92rem}
 ol.steps li{margin:6px 0}
 
@@ -356,7 +369,8 @@ ol.steps li{margin:6px 0}
 
   <!-- ============ Avisos al móvil ============ -->
   <section>
-    <h2>Avisos al móvil</h2>
+    <details class="fold" id="foldMovil">
+    <summary>Avisos al móvil <span class="fold-sub" id="movilResumen"></span></summary>
     <div class="panel">
       <div class="sub">
         <h3>Telegram</h3>
@@ -413,11 +427,13 @@ ol.steps li{margin:6px 0}
         <p class="hint">En ese horario los avisos se siguen guardando y llegan al móvil sin sonar.</p>
       </div>
     </div>
+    </details>
   </section>
 
   <!-- ============ GitHub Actions (solo propietario) ============ -->
   <section id="ghSection" hidden>
-    <h2>GitHub Actions</h2>
+    <details class="fold" id="foldGh">
+    <summary>GitHub Actions <span class="fold-sub" id="ghResumen"></span></summary>
     <div class="panel">
       <p style="margin-top:0">Conectado como <strong id="ghLogin"></strong> al repositorio <code id="ghRepo"></code>. GitHub comprobará las páginas marcadas con la etiqueta «GitHub» aunque tengas el ordenador apagado, y te avisará por Telegram o ntfy.</p>
       <div class="actions">
@@ -440,6 +456,7 @@ ol.steps li{margin:6px 0}
         <p class="hint">La lista se guarda en variables del repositorio, que solo ven quienes tienen acceso de escritura. Las copias (forks) no reciben ni variables ni secretos, así que el workflow no se ejecuta en ellas.</p>
       </details>
     </div>
+    </details>
   </section>
 
   <!-- ============ Historial general ============ -->
@@ -453,7 +470,8 @@ ol.steps li{margin:6px 0}
 
   <!-- ============ Copia de seguridad y conexión ============ -->
   <section>
-    <h2>Copia de seguridad y conexión</h2>
+    <details class="fold">
+    <summary>Copia de seguridad y conexión</summary>
     <div class="panel">
       <div class="sub">
         <h3>Exportar e importar</h3>
@@ -472,13 +490,18 @@ ol.steps li{margin:6px 0}
         <p class="hint">Opcional. Con un proxy propio (por ejemplo, un Cloudflare Worker gratuito con el archivo <code>cloudflare-worker.js</code>) no dependes de los proxies públicos. En modo automático se prueba primero.</p>
       </div>
     </div>
+    </details>
   </section>
 
   <section class="notes">
-    <h2>Si algo no funciona</h2>
+    <details class="fold">
+    <summary>Si algo no funciona</summary>
+    <div class="fold-body">
     <p>Muchas webs no dejan que otra página lea su contenido (bloqueo CORS). En modo automático, Vigía prueba tu proxy propio, el acceso directo y varios proxies públicos. Si ninguno responde, esa web no se puede vigilar desde el navegador, pero sí desde GitHub Actions.</p>
     <p>Chromium ralentiza las pestañas en segundo plano, a veces hasta una comprobación por minuto. Para intervalos cortos, usa la ventana flotante o deja esta pestaña en una ventana aparte.</p>
     <p>Las notificaciones del sistema funcionan en GitHub Pages (https) y en localhost; abriendo el archivo directamente (file://) puede que Chromium no las permita.</p>
+    </div>
+    </details>
   </section>
 </div>
 
@@ -1584,6 +1607,15 @@ ol.steps li{margin:6px 0}
   enlazar("#quietOn", t => { S.quiet.on = t.checked; });
   enlazar("#quietDesde", t => { S.quiet.desde = t.value; });
   enlazar("#quietHasta", t => { S.quiet.hasta = t.value; });
+  function resumenMovil() {
+    const on = [S.tg.on && S.tg.token && S.tg.chat && "Telegram", S.ntfy.on && S.ntfy.topic && "ntfy"].filter(Boolean);
+    $("#movilResumen").textContent = on.length ? `activo: ${on.join(" y ")}` : "desactivado";
+  }
+  ["#tgOn", "#tgToken", "#tgChat", "#ntfyOn", "#ntfyTopic"].forEach(sel => {
+    $(sel).addEventListener("input", resumenMovil);
+    $(sel).addEventListener("change", resumenMovil);
+  });
+  resumenMovil();
   enlazar("#exportSecrets", t => { S.exportSecrets = t.checked; });
   enlazar("#proxyPropio", t => {
     S.proxyPropio = t.value.trim();
@@ -1609,6 +1641,7 @@ ol.steps li{margin:6px 0}
       $("#tgChat").value = S.tg.chat = String(chat.id);
       S.tg.token = token;
       save();
+      resumenMovil();
       toast({ title: "Chat ID detectado", body: `${chat.first_name || chat.title || ""} (${chat.id}). Ya puedes enviar una prueba.` });
     } catch (err) {
       toast({ kind: "error", title: "No se pudo detectar", body: "Telegram: " + err.message });
@@ -1751,6 +1784,7 @@ ol.steps li{margin:6px 0}
     $("#ntfyOn").checked = S.ntfy.on; $("#ntfyTopic").value = S.ntfy.topic; $("#ntfyServer").value = S.ntfy.server;
     $("#quietOn").checked = S.quiet.on; $("#quietDesde").value = S.quiet.desde; $("#quietHasta").value = S.quiet.hasta;
     $("#proxyPropio").value = S.proxyPropio;
+    resumenMovil();
   }
 
   /* =====================================================================
@@ -1800,7 +1834,7 @@ ol.steps li{margin:6px 0}
   }
 
   function abrirOwnerDlg() {
-    if (owner) { $("#ghSection").scrollIntoView({ behavior: "smooth" }); return; }
+    if (owner) { $("#foldGh").open = true; $("#ghSection").scrollIntoView({ behavior: "smooth" }); return; }
     if (!propietarioEsperado()) {
       toast({ kind: "error", title: "Acceso de propietario no disponible", body: "Abre Vigía desde tu GitHub Pages o escribe tu usuario en PROPIETARIO_GITHUB dentro del código." });
       return;
@@ -1834,6 +1868,7 @@ ol.steps li{margin:6px 0}
       $("#ownerDlg").close();
       history.replaceState(null, "", location.pathname + location.search);
       mostrarPanelOwner();
+      $("#foldGh").open = true;
       toast({ title: "Acceso de propietario activado", body: `Hola, ${yo.login}. Ya puedes marcar páginas para GitHub Actions.` });
       verEjecuciones();
     } catch (err) {
@@ -1854,6 +1889,9 @@ ol.steps li{margin:6px 0}
   }
   function pintarPendiente() {
     if (!owner) return;
+    const nC = state.monitors.filter(m => m.cloud).length;
+    const pendC = localStorage.getItem(OWNER_KEY + ":pendiente") === "1";
+    $("#ghResumen").textContent = `${nC} ${nC === 1 ? "página" : "páginas"}${pendC ? ", cambios sin enviar" : ""}`;
     const pend = localStorage.getItem(OWNER_KEY + ":pendiente") === "1";
     const n = state.monitors.filter(m => m.cloud).length;
     const est = $("#ghEstado");
