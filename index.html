@@ -1,259 +1,905 @@
 <!DOCTYPE html>
-<html lang="es"><head>
+<html lang="es">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Página de prueba para Vigía</title>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@700&amp;family=IBM+Plex+Sans:wght@400;600&amp;display=swap" rel="stylesheet">
+<title>Vigía · monitor de cambios web</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛰️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#E8ECF0;--panel:#fff;--ink:#17202A;--muted:#5A6777;--line:#CBD3DC;--signal:#C98E00;--ok:#2B7A50;--err:#B83232}
-@media (prefers-color-scheme:dark){:root{--bg:#0F151C;--panel:#18212B;--ink:#E4E9EE;--muted:#93A1B1;--line:#2A3643;--signal:#F0B323;--ok:#52C28B;--err:#FF7070}}
+:root{
+  --bg:#E8ECF0; --panel:#FFFFFF; --ink:#17202A; --muted:#5A6777; --line:#CBD3DC;
+  --signal:#C98E00; --signal-soft:#FFF3D1; --changed:#1D63D6; --changed-soft:#E3ECFB;
+  --ok:#2B7A50; --err:#B83232; --err-soft:#FBE7E7;
+  --font:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --display:"IBM Plex Sans Condensed", "IBM Plex Sans", "Arial Narrow", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0F151C; --panel:#18212B; --ink:#E4E9EE; --muted:#93A1B1; --line:#2A3643;
+    --signal:#F0B323; --signal-soft:#3A2F12; --changed:#6AA2FF; --changed-soft:#1B2A44;
+    --ok:#52C28B; --err:#FF7070; --err-soft:#3A1C1F;
+  }
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "IBM Plex Sans",system-ui,sans-serif}
-.wrap{max-width:640px;margin:0 auto;padding:48px 20px}
-h1{font:700 clamp(2rem,6vw,3rem)/1.05 "IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;margin:0 0 8px}
-h2{font:700 1.3rem/1.2 "IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;margin:32px 0 10px}
-.lead{color:var(--muted);margin:0 0 28px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px}
-.center{text-align:center}
-#contador{font:700 clamp(4rem,18vw,7rem)/1 "IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;font-variant-numeric:tabular-nums;margin:0}
-#frase,#fecha{margin:8px 0 0}
-#fecha{color:var(--muted)}
-button{font:inherit;font-weight:600;cursor:pointer;border-radius:10px;border:1px solid var(--ink);background:var(--ink);color:var(--panel);padding:14px 22px;margin-top:22px}
-button:disabled{opacity:.5;cursor:wait}
-button.sec{background:none;color:var(--ink);border-color:var(--line);padding:8px 14px;font-weight:400;font-size:.9rem;margin-top:12px}
-button:focus-visible,input:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
-#estado{min-height:1.5em;margin:14px 0 0;font-size:.92rem}
-#estado a{color:inherit}
-.ok{color:var(--ok)}.err{color:var(--err)}
-label{display:block;font-size:.85rem;font-weight:600;color:var(--muted);margin:12px 0 4px}
-input{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
-.hint{font-size:.85rem;color:var(--muted);margin:10px 0 0}
-ol{padding-left:1.2em;color:var(--muted);font-size:.93rem}
-code{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:.88em;word-break:break-all}
-@media (max-width:480px){.grid{grid-template-columns:1fr}}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--font)}
+.wrap{max-width:880px;margin:0 auto;padding:40px 20px 80px}
+header{margin-bottom:28px}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(2.6rem,7vw,4rem);line-height:1;margin:0 0 10px;letter-spacing:-.01em}
+header p{margin:0;color:var(--muted);max-width:60ch}
+h2{font-family:var(--display);font-weight:600;font-size:1.35rem;margin:0 0 14px}
+section{margin-top:32px}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
+form .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+label{display:block;font-size:.85rem;font-weight:500;color:var(--muted);margin-bottom:4px}
+.grow{flex:1 1 320px}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;width:100%}
+input:focus-visible,select:focus-visible,button:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
+button{font:inherit;font-weight:600;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:10px 16px}
+button:hover{border-color:var(--muted)}
+button.primary{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+button.small{padding:6px 10px;font-size:.85rem;font-weight:500}
+button.danger{color:var(--err)}
+.hidden{display:none!important}
+details{margin-top:14px}
+summary{cursor:pointer;color:var(--muted);font-size:.9rem}
+details .row{margin-top:12px}
+.hint{font-size:.82rem;color:var(--muted);margin:6px 0 0}
+textarea{font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;resize:vertical}
+label.check{display:flex;gap:8px;align-items:center;color:var(--ink);font-size:.9rem;margin-top:10px;cursor:pointer}
+label.check input{width:auto;accent-color:var(--signal)}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);padding:22px;width:min(520px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(10,20,30,.45)}
+dialog label{margin-top:12px}
+.toast .ignore{margin-top:10px;margin-left:6px}
+.toast mark{background:var(--signal-soft);color:inherit;border-radius:3px}
+.toggles{display:flex;gap:20px;flex-wrap:wrap;margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
+.toggles label{display:flex;gap:8px;align-items:center;color:var(--ink);font-size:.95rem;margin:0;cursor:pointer}
+.toggles input{width:auto;accent-color:var(--signal)}
+
+/* Monitores */
+.empty{color:var(--muted);border:1px dashed var(--line);border-radius:14px;padding:28px;text-align:center}
+.mon{display:grid;grid-template-columns:64px 1fr;gap:16px;align-items:start;background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:12px;padding:16px;margin-bottom:12px}
+.mon[data-status="changed"]{border-left-color:var(--changed)}
+.mon[data-status="ok"]{border-left-color:var(--ok)}
+.mon[data-status="error"]{border-left-color:var(--err)}
+.mon[data-status="checking"]{border-left-color:var(--signal)}
+.ring{position:relative;width:64px;height:64px}
+.ring svg{transform:rotate(-90deg);display:block}
+.ring .track{stroke:var(--line)}
+.ring .bar{stroke:var(--signal);transition:stroke-dashoffset 1s linear}
+.mon[data-status="checking"] .ring svg{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(270deg)}}
+.ring span{position:absolute;inset:0;display:grid;place-items:center;font-size:.8rem;font-weight:600;font-variant-numeric:tabular-nums}
+.mon .url{font-weight:600;word-break:break-all;color:var(--ink);text-decoration:none}
+.mon .url:hover{text-decoration:underline}
+.meta{font-size:.85rem;color:var(--muted);margin:2px 0 8px}
+.msg{font-size:.9rem;margin:0 0 10px}
+.msg.err{color:var(--err)}
+.badge{display:inline-block;font-size:.78rem;font-weight:600;padding:2px 8px;border-radius:99px;margin-left:6px;vertical-align:2px;background:var(--changed-soft);color:var(--changed)}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* Historial */
+.log{list-style:none;margin:0;padding:0;font-size:.9rem}
+.log li{padding:8px 0;border-bottom:1px solid var(--line);display:flex;gap:12px}
+.log li:last-child{border-bottom:0}
+.log time{color:var(--muted);font-variant-numeric:tabular-nums;flex:0 0 auto}
+.log .k-changed{color:var(--changed);font-weight:600}
+.log .k-error{color:var(--err)}
+.notes{font-size:.9rem;color:var(--muted)}
+.notes p{margin:0 0 10px;max-width:70ch}
+
+/* Notificaciones flotantes */
+#toasts{position:fixed;top:16px;right:16px;z-index:1000;display:flex;flex-direction:column;gap:10px;width:min(380px,calc(100vw - 32px))}
+.toast{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-left:5px solid var(--changed);border-radius:12px;padding:14px 40px 14px 14px;box-shadow:0 10px 30px rgba(10,20,40,.25);position:relative;animation:drop .35s cubic-bezier(.2,.9,.3,1.2)}
+.toast.info{border-left-color:var(--signal)}
+.toast.error{border-left-color:var(--err)}
+.toast strong{display:block;margin-bottom:2px}
+.toast .t-url{font-size:.82rem;color:var(--muted);word-break:break-all}
+.toast pre{font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border-radius:6px;padding:8px;margin:8px 0 0;white-space:pre-wrap;word-break:break-word;max-height:140px;overflow:auto}
+.toast .add{color:var(--ok)} .toast .del{color:var(--err)}
+.toast .x{position:absolute;top:8px;right:8px;border:0;background:none;padding:4px 8px;font-size:1.1rem;color:var(--muted)}
+.toast .open{margin-top:10px}
+@keyframes drop{from{opacity:0;transform:translateY(-12px) scale(.97)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){
+  .toast,.mon[data-status="checking"] .ring svg{animation:none}
+  .ring .bar{transition:none}
+}
+@media (max-width:520px){
+  .mon{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>Página de prueba</h1>
-  <p class="lead">Cada clic cambia el contenido y guarda la nueva versión, para que Vigía lo detecte en su siguiente comprobación.</p>
+<div id="toasts" aria-live="polite"></div>
 
-  <div class="card center">
-    <p id="contador" data-n="1">1</p>
-    <p id="frase">El precio ha bajado.</p>
-    <p id="fecha">Cambiado el 17/9/2026, 9:19:54</p>
-    <button id="cambiar" type="button" disabled="">Cambiar contenido</button>
-    <p id="estado"></p>
-  </div>
-
-  <!-- Configuración para GitHub (solo se muestra en github.io) -->
-  <section id="ghConfig" hidden="">
-    <h2>Conexión con GitHub</h2>
-    <div class="card">
-      <div class="grid">
-        <div><label for="owner">Usuario u organización</label><input id="owner" autocomplete="off"></div>
-        <div><label for="repo">Repositorio</label><input id="repo" autocomplete="off"></div>
-        <div><label for="path">Ruta del archivo</label><input id="path" autocomplete="off"></div>
-        <div><label for="branch">Rama (vacío = la principal)</label><input id="branch" autocomplete="off" placeholder="main"></div>
-      </div>
-      <label for="token">Token de acceso</label>
-      <input id="token" type="password" autocomplete="off" placeholder="github_pat_…">
-      <p class="hint">Crea un token <em>fine-grained</em> en GitHub (Settings → Developer settings → Personal access tokens), limitado solo a este repositorio y con permiso <strong>Contents: Read and write</strong>. Se guarda únicamente en este navegador, nunca dentro del archivo.</p>
-      <button id="guardarCfg" class="sec" type="button">Guardar conexión</button>
-      <button id="borrarCfg" class="sec" type="button">Borrar token</button>
+<dialog id="editDlg">
+  <form method="dialog" id="editForm">
+    <h2>Ajustes de la página</h2>
+    <p class="meta" id="e-url"></p>
+    <label for="e-interval">Comprobar cada (segundos)</label>
+    <input id="e-interval" type="number" min="10">
+    <label for="e-mode">Qué comparar</label>
+    <select id="e-mode">
+      <option value="text">Solo el texto visible (recomendado)</option>
+      <option value="html">Todo el código HTML</option>
+    </select>
+    <label for="e-selector">Solo esta parte (selector CSS)</label>
+    <input id="e-selector" type="text" placeholder="p. ej. #precio">
+    <label for="e-proxy">Forma de acceso</label>
+    <select id="e-proxy">
+      <option value="auto">Automática</option>
+      <option value="direct">Directa (sin proxy)</option>
+      <option value="allorigins">Proxy allorigins.win</option>
+      <option value="codetabs">Proxy codetabs.com</option>
+      <option value="corsproxy">Proxy corsproxy.io</option>
+    </select>
+    <label for="e-ignore">Ignorar líneas que contengan (una por línea)</label>
+    <textarea id="e-ignore" rows="4"></textarea>
+    <label class="check"><input type="checkbox" id="e-random"> Ignorar códigos aleatorios</label>
+    <p class="hint">Al guardar, la versión actual pasa a ser la nueva referencia, sin avisar.</p>
+    <div class="actions" style="margin-top:16px;justify-content:flex-end">
+      <button type="button" class="small" id="e-cancel">Cancelar</button>
+      <button type="submit" class="small primary" value="save">Guardar ajustes</button>
     </div>
+  </form>
+</dialog>
+
+<div class="wrap">
+  <header>
+    <h1>Vigía</h1>
+    <p>Escribe una dirección, elige cada cuánto mirarla y deja esta pestaña abierta. Si la página cambia, te avisa con una notificación flotante.</p>
+  </header>
+
+  <form id="addForm" class="panel" autocomplete="off">
+    <div class="row">
+      <div class="grow">
+        <label for="url">Página a vigilar</label>
+        <input id="url" type="text" inputmode="url" placeholder="https://ejemplo.com/noticias" required>
+      </div>
+      <div style="flex:0 1 190px">
+        <label for="interval">Comprobar cada</label>
+        <select id="interval">
+          <option value="30">30 segundos</option>
+          <option value="60">1 minuto</option>
+          <option value="300" selected>5 minutos</option>
+          <option value="900">15 minutos</option>
+          <option value="1800">30 minutos</option>
+          <option value="3600">1 hora</option>
+          <option value="21600">6 horas</option>
+          <option value="custom">Personalizado…</option>
+        </select>
+      </div>
+      <div id="customBox" class="hidden" style="flex:0 1 200px;display:flex;gap:6px">
+        <div style="flex:1">
+          <label for="customVal">Cantidad</label>
+          <input id="customVal" type="number" min="1" value="10">
+        </div>
+        <div style="flex:1">
+          <label for="customUnit">Unidad</label>
+          <select id="customUnit">
+            <option value="1">seg</option>
+            <option value="60" selected>min</option>
+            <option value="3600">horas</option>
+          </select>
+        </div>
+      </div>
+      <button class="primary" type="submit">Empezar a vigilar</button>
+    </div>
+
+    <details>
+      <summary>Opciones avanzadas</summary>
+      <div class="row">
+        <div style="flex:1 1 200px">
+          <label for="mode">Qué comparar</label>
+          <select id="mode">
+            <option value="text">Solo el texto visible (recomendado)</option>
+            <option value="html">Todo el código HTML</option>
+          </select>
+        </div>
+        <div style="flex:1 1 200px">
+          <label for="selector">Solo esta parte (selector CSS)</label>
+          <input id="selector" type="text" placeholder="p. ej. #precio, .lista-ofertas">
+        </div>
+        <div style="flex:1 1 200px">
+          <label for="proxy">Forma de acceso</label>
+          <select id="proxy">
+            <option value="auto">Automática</option>
+            <option value="direct">Directa (sin proxy)</option>
+            <option value="allorigins">Proxy allorigins.win</option>
+            <option value="codetabs">Proxy codetabs.com</option>
+            <option value="corsproxy">Proxy corsproxy.io</option>
+          </select>
+        </div>
+      </div>
+      <p class="hint">Comparar todo el HTML avisa hasta de cambios invisibles (anuncios, tokens), así que suele dar falsos avisos. Un selector CSS limita la vigilancia a una zona concreta, como un precio o una lista.</p>
+      <label for="ignore" style="margin-top:12px">Ignorar líneas que contengan (una por línea)</label>
+      <textarea id="ignore" rows="2" placeholder="go-mpulse.net&#10;Visitas hoy:"></textarea>
+      <label class="check"><input type="checkbox" id="random" checked> Ignorar códigos aleatorios (tokens, identificadores, marcas de tiempo)</label>
+    </details>
+
+    <div class="toggles">
+      <label><input type="checkbox" id="optSound" checked> Sonido al detectar cambios</label>
+      <label><input type="checkbox" id="optSystem"> Notificación del sistema también</label>
+    </div>
+    <div class="actions" style="margin-top:14px;align-items:center">
+      <button type="button" class="small" id="btnPip">Abrir ventana flotante</button>
+      <button type="button" class="small" id="btnTest">Probar aviso</button>
+      <span class="hint" id="permInfo" style="margin:0"></span>
+    </div>
+    <p class="hint">La ventana flotante se queda encima de las demás pestañas y programas, y muestra ahí los avisos.</p>
+  </form>
+
+  <section>
+    <h2>Páginas vigiladas</h2>
+    <div id="list"></div>
   </section>
 
-  <h2>Cómo probarlo</h2>
-  <ol id="pasosGh" hidden="">
-    <li>Sube <code>index.html</code> y <code>prueba.html</code> al repositorio y activa GitHub Pages (Settings → Pages).</li>
-    <li>Abre <code id="urlVigia">…/index.html</code> y vigila <code id="urlPrueba">…/prueba.html</code> cada 1 minuto.</li>
-    <li>En esta página, rellena la conexión con GitHub y pulsa «Cambiar contenido». Se hará un commit.</li>
-    <li>GitHub tarda entre 30 segundos y un par de minutos en publicar la nueva versión. Después, Vigía mostrará el aviso.</li>
-  </ol>
-  <ol id="pasosLocal" hidden="">
-    <li>Pon <code>index.html</code> y <code>prueba.html</code> en la misma carpeta y ejecuta ahí <code>python -m http.server 8000</code>.</li>
-    <li>Abre <code>http://localhost:8000/index.html</code> y vigila <code>http://localhost:8000/prueba.html</code> cada 30 segundos.</li>
-    <li>Abre esta página desde <code>http://localhost:8000/prueba.html</code> y pulsa «Cambiar contenido». La primera vez elige el archivo <code>prueba.html</code> y permite editarlo.</li>
-  </ol>
+  <section>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+      <h2>Historial</h2>
+      <button class="small" type="button" id="clearLog">Borrar historial</button>
+    </div>
+    <div class="panel"><ul class="log" id="log"></ul></div>
+  </section>
+
+  <section class="notes">
+    <h2>Si algo no funciona</h2>
+    <p>Muchas webs no dejan que otra página lea su contenido (bloqueo CORS). En modo automático, Vigía prueba primero el acceso directo y después varios proxies públicos. Si ninguno responde, esa web no se puede vigilar desde el navegador.</p>
+    <p>Chromium ralentiza los temporizadores de las pestañas en segundo plano, a veces hasta una comprobación por minuto. Para intervalos muy cortos, deja esta pestaña visible o en una ventana aparte.</p>
+    <p>Las notificaciones del sistema funcionan en GitHub Pages (https) y en localhost. Abriendo el archivo directamente (file://) puede que Chromium no las permita; la notificación flotante funciona siempre.</p>
+  </section>
 </div>
 
 <script>
 (() => {
-  const FRASES = [
-    "Ha llegado una oferta nueva.", "Se ha publicado un artículo.", "El precio ha bajado.",
-    "Hay stock disponible otra vez.", "Nueva entrada en el tablón.", "Se ha actualizado el horario.",
-    "Ha cambiado el estado del pedido.", "Hay un comentario nuevo."
-  ];
+  "use strict";
   const $ = s => document.querySelector(s);
+  const STORE_KEY = "vigia:v1";
+  const RING_C = 2 * Math.PI * 27;
+
+  /* ---------- Estado ---------- */
+  let state = { monitors: [], log: [], settings: { sound: true, system: false } };
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+    if (saved) state = Object.assign(state, saved);
+  } catch (e) { /* sin almacenamiento: seguimos en memoria */ }
+  state.monitors.forEach(m => { m.busy = false; if (m.status === "checking") m.status = "idle"; });
+
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+    catch (e) {
+      // Si el almacenamiento está lleno, descartamos las líneas guardadas (solo se pierde el detalle del diff)
+      state.monitors.forEach(m => m.lines = null);
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (_) {}
+    }
+  }
+
+  /* ---------- Utilidades ---------- */
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-  const estado = (html, cls = "") => { $("#estado").innerHTML = html; $("#estado").className = cls; };
-  const enGitHub = location.hostname.endsWith(".github.io");
-  const CFG_KEY = "prueba-vigia:github";
+  const uid = () => Math.random().toString(36).slice(2, 10);
+  const hms = t => t ? new Date(t).toLocaleTimeString("es-ES") : "—";
+  const dt = t => t ? new Date(t).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "medium" }) : "—";
+  const host = u => { try { return new URL(u).host; } catch { return u; } };
 
-  /* ---------- Contenido ---------- */
-  function actualizarPagina() {
-    const c = $("#contador");
-    const n = Number(c.dataset.n) + 1;
-    c.dataset.n = n;
-    c.textContent = n;
-    $("#frase").textContent = FRASES[Math.floor(Math.random() * FRASES.length)];
-    $("#fecha").textContent = "Cambiado el " + new Date().toLocaleString("es-ES");
+  function fmtDur(sec) {
+    if (sec < 60) return `${sec} s`;
+    if (sec < 3600) return sec % 60 ? `${Math.floor(sec/60)} min ${sec%60} s` : `${sec/60} min`;
+    const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
+    return m ? `${h} h ${m} min` : `${h} h`;
+  }
+  function fmtCountdown(sec) {
+    if (sec >= 3600) return `${Math.floor(sec/3600)}h${String(Math.floor(sec%3600/60)).padStart(2,"0")}`;
+    return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,"0")}`;
+  }
+  function hash(str) { // cyrb53
+    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for (let i = 0; i < str.length; i++) {
+      const ch = str.charCodeAt(i);
+      h1 = Math.imul(h1 ^ ch, 2654435761);
+      h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
   }
 
-  function htmlParaGuardar() {
-    // Copia limpia: sin mensajes de estado, sin valores de formulario, secciones ocultas como al principio
-    const copia = document.documentElement.cloneNode(true);
-    const est = copia.querySelector("#estado"); est.textContent = ""; est.removeAttribute("class");
-    copia.querySelectorAll("input").forEach(i => i.removeAttribute("value"));
-    ["#ghConfig", "#pasosGh", "#pasosLocal"].forEach(s => copia.querySelector(s).setAttribute("hidden", ""));
-    copia.querySelector("#urlVigia").textContent = "…/index.html";
-    copia.querySelector("#urlPrueba").textContent = "…/prueba.html";
-    return "<!DOCTYPE html>\n" + copia.outerHTML + "\n";
+  /* ---------- Descarga de la página ---------- */
+  const PROXIES = {
+    direct:     u => u,
+    allorigins: u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}&_=${Date.now()}`,
+    codetabs:   u => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`,
+    corsproxy:  u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`
+  };
+
+  async function fetchPage(m) {
+    const order = m.proxy === "auto"
+      ? [...new Set([m.via, "direct", "allorigins", "codetabs", "corsproxy"].filter(Boolean))]
+      : [m.proxy];
+    let lastErr = "";
+    for (const key of order) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 20000);
+      try {
+        const res = await fetch(PROXIES[key](m.url), { cache: "no-store", signal: ctrl.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        if (!text.trim()) throw new Error("respuesta vacía");
+        m.via = key;
+        return text;
+      } catch (e) {
+        lastErr = `${key}: ${e.name === "AbortError" ? "tiempo agotado" : (e.message === "Failed to fetch" ? "bloqueado o sin conexión" : e.message)}`;
+      } finally { clearTimeout(timer); }
+    }
+    throw new Error(`No se pudo leer la página (${lastErr}).`);
   }
 
-  /* ---------- Modo GitHub ---------- */
-  function cfgInicial() {
-    let saved = {};
-    try { saved = JSON.parse(localStorage.getItem(CFG_KEY) || "{}"); } catch {}
-    const owner = location.hostname.replace(/\.github\.io$/, "");
-    const partes = location.pathname.replace(/^\/+/, "").split("/");
-    let repo, path;
-    if (partes.length > 1) { repo = partes.shift(); path = partes.join("/"); }
-    else { repo = `${owner}.github.io`; path = partes.join("/"); }
-    if (!path || path.endsWith("/")) path += "index.html";
-    return Object.assign({ owner, repo, path, branch: "", token: "" }, saved);
+  /* ---------- Extracción y comparación ---------- */
+  const BLOCK = "address,article,aside,blockquote,br,dd,div,dl,dt,figcaption,figure,footer,form,h1,h2,h3,h4,h5,h6,header,hr,li,main,nav,ol,p,pre,section,table,td,th,tr,ul,option,button";
+
+  function extract(raw, m) {
+    const looksHtml = /<\s*(html|head|body|div|p|span|a)\b/i.test(raw);
+    if (!looksHtml) return raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+
+    const doc = new DOMParser().parseFromString(raw, "text/html");
+    let roots = [doc.documentElement];
+    if (m.selector) {
+      try { roots = [...doc.querySelectorAll(m.selector)]; }
+      catch { throw new Error("El selector CSS no es válido."); }
+      if (!roots.length) throw new Error(`El selector «${m.selector}» no encontró nada en la página.`);
+    }
+    if (m.mode === "html") {
+      if (m.random !== false) {
+        // El contenido de los scripts en línea y los atributos de seguridad cambian en cada carga
+        roots.forEach(r => {
+          r.querySelectorAll("script:not([src])").forEach(s => { s.textContent = ""; });
+          r.querySelectorAll("[nonce],[integrity]").forEach(n => { n.removeAttribute("nonce"); n.removeAttribute("integrity"); });
+          r.querySelectorAll('input[type="hidden"]').forEach(n => n.removeAttribute("value"));
+          r.querySelectorAll('meta[name*="csrf" i],meta[name*="token" i]').forEach(n => n.removeAttribute("content"));
+        });
+      }
+      return roots.flatMap(r => r.outerHTML.split("\n")).map(s => s.trim()).filter(Boolean);
+    }
+    roots.forEach(r => {
+      r.querySelectorAll("script,style,noscript,template,svg,iframe,link,meta").forEach(n => n.remove());
+      r.querySelectorAll(BLOCK).forEach(n => n.after(doc.createTextNode("\n")));
+    });
+    return roots.flatMap(r => r.textContent.split("\n"))
+      .map(s => s.replace(/\s+/g, " ").trim()).filter(Boolean);
   }
 
-  function leerForm() {
-    return {
-      owner: $("#owner").value.trim(), repo: $("#repo").value.trim(),
-      path: $("#path").value.trim().replace(/^\/+/, ""), branch: $("#branch").value.trim(),
-      token: $("#token").value.trim()
-    };
+  // Si cambia la forma de procesar, la siguiente comprobación toma nueva referencia sin avisar
+  const NORM_VERSION = 2;
+
+  function limpiarAleatorio(line) {
+    return line
+      .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "‹id›")
+      .replace(/\b\d{10,}\b/g, "‹n›")
+      .replace(/(?=[A-Za-z0-9_+-]*\d)(?=[A-Za-z0-9_+-]*[A-Za-z])[A-Za-z0-9_+-]{20,}={0,2}/g, "‹código›");
   }
 
-  function guardarCfg(cfg) {
-    try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch {}
+  function reglasIgnorar(m) {
+    return String(m.ignore || "").split("\n").map(s => s.trim()).filter(Boolean);
   }
 
-  function base64Utf8(str) {
-    const bytes = new TextEncoder().encode(str);
-    let bin = "";
-    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    return btoa(bin);
+  function filtrar(lines, m) {
+    const reglas = reglasIgnorar(m);
+    let out = reglas.length ? lines.filter(l => !reglas.some(r => l.includes(r))) : lines;
+    if (m.random !== false) out = out.map(limpiarAleatorio);
+    return out;
   }
 
-  async function commitGitHub() {
-    const cfg = leerForm();
-    if (!cfg.owner || !cfg.repo || !cfg.path) throw new Error("Faltan datos del repositorio.");
-    if (!cfg.token) throw new Error("Falta el token de acceso (más abajo).");
-    guardarCfg(cfg);
-
-    const api = `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${cfg.path.split("/").map(encodeURIComponent).join("/")}`;
-    const headers = { "Authorization": `Bearer ${cfg.token}`, "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
-
-    const info = await fetch(api + (cfg.branch ? `?ref=${encodeURIComponent(cfg.branch)}` : ""), { headers, cache: "no-store" });
-    if (!info.ok) throw new Error(mensajeApi(info.status, "leer el archivo"));
-    const { sha } = await info.json();
-
-    const body = {
-      message: `Prueba Vigía: versión ${$("#contador").dataset.n}`,
-      content: base64Utf8(htmlParaGuardar()),
-      sha
-    };
-    if (cfg.branch) body.branch = cfg.branch;
-
-    const res = await fetch(api, { method: "PUT", headers, body: JSON.stringify(body) });
-    if (!res.ok) throw new Error(mensajeApi(res.status, "guardar el cambio"));
-    const data = await res.json();
-    return { commitUrl: data.commit && data.commit.html_url, cfg };
+  // Muestra solo la zona donde empiezan a diferir dos líneas, con la parte distinta resaltada
+  function fragmento(line, otra) {
+    const LIM = 150;
+    if (otra == null) return esc(line.length > LIM ? line.slice(0, LIM) + "…" : line);
+    let p = 0;
+    while (p < line.length && p < otra.length && line[p] === otra[p]) p++;
+    let s = 0;
+    while (s < line.length - p && s < otra.length - p && line[line.length - 1 - s] === otra[otra.length - 1 - s]) s++;
+    const ini = Math.max(0, p - 40);
+    const dif = line.slice(p, line.length - s);
+    const fin = Math.min(line.length - s + 30, line.length);
+    return (ini > 0 ? "…" : "") + esc(line.slice(ini, p)) +
+      `<mark>${esc(dif.length > LIM ? dif.slice(0, LIM) + "…" : dif)}</mark>` +
+      esc(line.slice(line.length - s, fin)) + (fin < line.length ? "…" : "");
   }
 
-  function mensajeApi(status, accion) {
-    if (status === 401) return `No se pudo ${accion}: el token no es válido o ha caducado.`;
-    if (status === 403) return `No se pudo ${accion}: el token no tiene permiso Contents de escritura en este repositorio.`;
-    if (status === 404) return `No se pudo ${accion}: no se encuentra el repositorio, la rama o la ruta (o el token no tiene acceso).`;
-    if (status === 409) return `No se pudo ${accion}: hubo otro cambio a la vez. Vuelve a pulsar.`;
-    return `No se pudo ${accion} (error ${status}).`;
+  function prefijoComun(a, b) {
+    let p = 0;
+    while (p < a.length && p < b.length && a[p] === b[p]) p++;
+    return a.slice(0, Math.min(p, 80)).trim();
   }
 
-  /* ---------- Modo local (File System Access) ---------- */
-  let handle = null;
-  const idb = (mode, fn) => new Promise((res, rej) => {
-    const r = indexedDB.open("prueba-vigia", 1);
-    r.onupgradeneeded = () => r.result.createObjectStore("h");
-    r.onsuccess = () => {
-      const tx = r.result.transaction("h", mode), q = fn(tx.objectStore("h"));
-      tx.oncomplete = () => res(q && q.result); tx.onerror = () => rej(tx.error);
-    };
-    r.onerror = () => rej(r.error);
+  function diff(oldL, newL) {
+    const o = new Set(oldL), n = new Set(newL);
+    return { added: newL.filter(x => !o.has(x)), removed: oldL.filter(x => !n.has(x)) };
+  }
+
+  /* ---------- Comprobación ---------- */
+  async function check(m) {
+    if (m.busy) return;
+    m.busy = true; m.status = "checking"; m.message = "Comprobando…";
+    renderList();
+    try {
+      const raw = await fetchPage(m);
+      const lines = filtrar(extract(raw, m), m);
+      const h = hash(lines.join("\n"));
+      if (m.hash && (m.rebase || m.normVersion !== NORM_VERSION)) {
+        m.status = "ok";
+        m.message = `Ajustes aplicados. Nueva referencia guardada (${lines.length} líneas).`;
+        addLog(m, "info", "Nueva referencia tras cambiar los ajustes");
+      } else if (!m.hash) {
+        m.status = "ok";
+        m.message = `Referencia guardada (${lines.length} líneas). A partir de ahora avisará de cualquier cambio.`;
+        addLog(m, "info", "Referencia inicial guardada");
+      } else if (h !== m.hash) {
+        const d = m.lines ? diff(m.lines, lines) : null;
+        m.changes = (m.changes || 0) + 1;
+        m.lastChange = Date.now();
+        m.status = "changed";
+        m.message = d ? `Cambió: +${d.added.length} líneas nuevas, −${d.removed.length} eliminadas.` : "La página ha cambiado.";
+        notifyChange(m, d);
+      } else {
+        m.status = m.status === "changed" && m.unseen ? "changed" : "ok";
+        m.message = `Sin cambios en la última comprobación.`;
+      }
+      m.hash = h;
+      m.rebase = false;
+      m.normVersion = NORM_VERSION;
+      m.lines = lines.length <= 4000 ? lines : null;
+      m.errorShown = false;
+    } catch (e) {
+      m.status = "error";
+      m.message = e.message + " Prueba otra forma de acceso en opciones avanzadas.";
+      if (!m.errorShown) {
+        toast({ kind: "error", title: "No se pudo comprobar", url: m.url, body: e.message });
+        addLog(m, "error", e.message);
+        m.errorShown = true;
+      }
+    } finally {
+      m.busy = false;
+      m.lastCheck = Date.now();
+      m.nextAt = Date.now() + m.interval * 1000;
+      save();
+      renderList();
+    }
+  }
+
+  /* ---------- Avisos ---------- */
+  let unseen = 0;
+  const baseTitle = document.title;
+
+  function notifyChange(m, d) {
+    m.unseen = true;
+    let preview = "";
+    const prefijos = [];
+    if (d) {
+      const parts = [];
+      const pares = Math.min(d.added.length, d.removed.length);
+      // Líneas modificadas: se muestran emparejadas, con la parte distinta resaltada
+      for (let i = 0; i < Math.min(pares, 3); i++) {
+        parts.push(`<span class="del">− ${fragmento(d.removed[i], d.added[i])}</span>`);
+        parts.push(`<span class="add">+ ${fragmento(d.added[i], d.removed[i])}</span>`);
+      }
+      for (let i = 0; i < pares; i++) {
+        const pre = prefijoComun(d.added[i], d.removed[i]);
+        if (pre.length >= 15) prefijos.push(pre);
+      }
+      d.added.slice(pares, pares + 3).forEach(l => parts.push(`<span class="add">+ ${fragmento(l)}</span>`));
+      d.removed.slice(pares, pares + 2).forEach(l => parts.push(`<span class="del">− ${fragmento(l)}</span>`));
+      preview = parts.length ? parts.join("\n") : "Mismo contenido reordenado o con líneas repetidas.";
+    }
+    const unicos = [...new Set(prefijos)];
+    toast({
+      kind: "changed", sticky: true,
+      title: `Cambio detectado en ${host(m.url)}`,
+      url: m.url,
+      htmlBody: preview,
+      summary: d ? `+${d.added.length} / −${d.removed.length} líneas, ${hms(Date.now())}` : hms(Date.now()),
+      onOpen: () => markSeen(m),
+      ignoreLabel: unicos.length ? "No avisar de este tipo de cambio" : null,
+      onIgnore: () => {
+        const actuales = reglasIgnorar(m);
+        m.ignore = [...actuales, ...unicos.filter(p => !actuales.includes(p))].join("\n");
+        m.rebase = true;
+        markSeen(m);
+        toast({ title: "Filtro añadido", url: m.url, body: "Esas líneas se ignorarán a partir de ahora. Puedes revisarlo en Ajustes." });
+      }
+    });
+    addLog(m, "changed", d ? `Cambio: +${d.added.length} / −${d.removed.length} líneas` : "Cambio detectado");
+    beep();
+
+    if (state.settings.system && "Notification" in window && Notification.permission === "granted") {
+      try {
+        const n = new Notification(`Cambio en ${host(m.url)}`, {
+          body: d && d.added[0] ? d.added[0].slice(0, 120) : "La página se ha actualizado.",
+          tag: m.id, renotify: true, requireInteraction: true
+        });
+        n.onclick = () => { window.focus(); window.open(m.url, "_blank", "noopener"); n.close(); };
+      } catch (_) {}
+    }
+    if (document.hidden) { unseen++; document.title = `(${unseen}) Cambio detectado · Vigía`; }
+  }
+
+  function markSeen(m) { m.unseen = false; if (m.status === "changed") m.status = "ok"; save(); renderList(); }
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) { unseen = 0; document.title = baseTitle; }
   });
 
-  async function escribirLocal() {
-    if (!handle) handle = await idb("readonly", s => s.get("archivo")).catch(() => null);
-    if (!handle) {
-      [handle] = await window.showOpenFilePicker({ types: [{ description: "Página HTML", accept: { "text/html": [".html", ".htm"] } }] });
-      idb("readwrite", s => s.put(handle, "archivo")).catch(() => {});
-    }
-    if ((await handle.queryPermission({ mode: "readwrite" })) !== "granted" &&
-        (await handle.requestPermission({ mode: "readwrite" })) !== "granted") {
-      throw new Error("No se concedió permiso para editar el archivo.");
-    }
-    const w = await handle.createWritable();
-    await w.write(htmlParaGuardar());
-    await w.close();
-  }
+  function toast({ kind = "info", title, url, body, htmlBody, summary, sticky = false, onOpen, ignoreLabel, onIgnore }) {
+    const html = `
+      <button class="x" type="button" aria-label="Cerrar">×</button>
+      <strong>${esc(title)}</strong>
+      ${url ? `<div class="t-url">${esc(url)}</div>` : ""}
+      ${summary ? `<div class="t-url">${esc(summary)}</div>` : ""}
+      ${body ? `<div style="font-size:.88rem;margin-top:4px">${esc(body)}</div>` : ""}
+      ${htmlBody ? `<pre>${htmlBody}</pre>` : ""}
+      ${kind === "changed" ? `<button class="small open" type="button">Abrir página</button>` : ""}
+      ${ignoreLabel ? `<button class="small ignore" type="button">${esc(ignoreLabel)}</button>` : ""}`;
 
-  /* ---------- Inicio ---------- */
-  if (enGitHub) {
-    const cfg = cfgInicial();
-    ["owner", "repo", "path", "branch", "token"].forEach(k => $("#" + k).value = cfg[k] || "");
-    $("#ghConfig").hidden = false;
-    $("#pasosGh").hidden = false;
-    const base = location.href.replace(/[^/]*$/, "");
-    $("#urlVigia").textContent = base + "index.html";
-    $("#urlPrueba").textContent = location.href.split("#")[0].split("?")[0];
-    if (!cfg.token) estado("Rellena la conexión con GitHub (más abajo) antes de pulsar.");
-    $("#guardarCfg").onclick = () => { guardarCfg(leerForm()); estado("Conexión guardada en este navegador.", "ok"); };
-    $("#borrarCfg").onclick = () => {
-      $("#token").value = ""; guardarCfg(leerForm());
-      estado("Token borrado de este navegador.", "ok");
+    // Se dibuja en esta pestaña y, si está abierta, en la ventana flotante; cerrar uno cierra ambos
+    const destinos = [document];
+    if (pipWin && !pipWin.closed) destinos.push(pipWin.document);
+    const els = [];
+    let cerrado = false;
+    const close = () => {
+      if (cerrado) return;
+      cerrado = true;
+      els.forEach(el => { el.style.transition = "opacity .2s"; el.style.opacity = "0"; setTimeout(() => el.remove(), 200); });
     };
-  } else {
-    $("#pasosLocal").hidden = false;
-    if (!("showOpenFilePicker" in window)) estado("Este navegador no permite editar archivos. Usa Chrome, Edge o Brave; si no, se descargará una copia modificada.", "err");
+    destinos.forEach(doc => {
+      const cont = doc.getElementById("toasts");
+      if (!cont) return;
+      const el = doc.createElement("div");
+      el.className = `toast ${kind}`;
+      el.setAttribute("role", kind === "error" ? "alert" : "status");
+      el.innerHTML = html;
+      el.querySelector(".x").onclick = () => { close(); onOpen && onOpen(); };
+      const open = el.querySelector(".open");
+      if (open) open.onclick = () => { window.open(url, "_blank", "noopener"); close(); onOpen && onOpen(); };
+      const ign = el.querySelector(".ignore");
+      if (ign) ign.onclick = () => { close(); onIgnore && onIgnore(); };
+      cont.prepend(el);
+      while (cont.children.length > 5) cont.lastElementChild.remove();
+      els.push(el);
+    });
+    if (!sticky) setTimeout(close, 6000);
   }
 
-  $("#cambiar").onclick = async () => {
-    const btn = $("#cambiar");
-    btn.disabled = true;
-    actualizarPagina();
-    try {
-      if (enGitHub) {
-        estado("Guardando en GitHub…");
-        const { commitUrl, cfg } = await commitGitHub();
-        const actions = `https://github.com/${esc(cfg.owner)}/${esc(cfg.repo)}/actions`;
-        estado(`Commit hecho (versión ${$("#contador").dataset.n}). GitHub Pages lo publicará en uno o dos minutos: puedes seguirlo en <a href="${actions}" target="_blank" rel="noopener">Actions</a>${commitUrl ? ` o ver el <a href="${esc(commitUrl)}" target="_blank" rel="noopener">commit</a>` : ""}.`, "ok");
-      } else if ("showOpenFilePicker" in window) {
-        await escribirLocal();
-        estado(`Guardado en ${esc(handle.name)} (versión ${$("#contador").dataset.n}). Vigía lo verá en su próxima comprobación.`, "ok");
-      } else {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(new Blob([htmlParaGuardar()], { type: "text/html" }));
-        a.download = "prueba.html"; a.click();
-        estado("Descargada una copia modificada. Reemplaza con ella el prueba.html original.", "err");
+  /* ---------- Ventana flotante (siempre encima) ---------- */
+  let pipWin = null;
+  const PIP_CSS = `
+    body{padding:10px;margin:0;font-size:14px}
+    #toasts{position:static;width:auto;gap:8px}
+    .toast{box-shadow:none;padding:10px 34px 10px 10px}
+    .pip-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
+    .pip-head strong{font-family:var(--display);font-size:1.3rem}
+    .pip-list{list-style:none;margin:10px 0 0;padding:0;font-size:.82rem}
+    .pip-list li{display:flex;gap:8px;align-items:center;padding:5px 0;border-top:1px solid var(--line)}
+    .pip-list .dot{width:9px;height:9px;border-radius:50%;background:var(--line);flex:0 0 auto}
+    .pip-list .d-ok{background:var(--ok)} .pip-list .d-changed{background:var(--changed)}
+    .pip-list .d-error{background:var(--err)} .pip-list .d-checking{background:var(--signal)}
+    .pip-list .h{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .pip-list .c{font-variant-numeric:tabular-nums;color:var(--muted)}`;
+
+  async function abrirPip() {
+    if (pipWin && !pipWin.closed) { pipWin.focus(); return; }
+    let win;
+    if ("documentPictureInPicture" in window) {
+      try { win = await documentPictureInPicture.requestWindow({ width: 360, height: 420 }); }
+      catch (e) { win = null; }
+    }
+    let flotaEncima = !!win;
+    if (!win) {
+      // Alternativa: ventana emergente normal (no se mantiene encima de otras aplicaciones)
+      win = window.open("", "vigia-flotante", "popup,width=380,height=460");
+      if (!win) {
+        toast({ kind: "error", title: "No se pudo abrir la ventana", body: "Chromium ha bloqueado la ventana emergente. Permite las ventanas emergentes para esta página y vuelve a intentarlo." });
+        return;
       }
-    } catch (e) {
-      if (e.name === "AbortError") estado("No se eligió ningún archivo, así que el cambio solo se ve aquí.", "err");
-      else estado(esc(e.message), "err");
-    } finally {
-      btn.disabled = false;
+      win.document.open();
+      win.document.write("<!DOCTYPE html><html lang='es'><head><meta charset='utf-8'><title>Vigía</title></head><body></body></html>");
+      win.document.close();
+    }
+    const d = win.document;
+    document.querySelectorAll('style, link[rel="stylesheet"]').forEach(n => d.head.appendChild(n.cloneNode(true)));
+    const st = d.createElement("style"); st.textContent = PIP_CSS; d.head.appendChild(st);
+    d.body.innerHTML = `
+      <div class="pip-head"><strong>Vigía</strong><span class="t-url" id="pipResumen"></span></div>
+      <div id="toasts" aria-live="polite"></div>
+      <ul class="pip-list" id="pipList"></ul>`;
+    pipWin = win;
+    win.addEventListener("pagehide", () => { pipWin = null; $("#btnPip").textContent = "Abrir ventana flotante"; });
+    $("#btnPip").textContent = "Ventana flotante abierta";
+    actualizarPip();
+    toast({ title: "Ventana flotante lista", body: flotaEncima
+      ? "Los avisos aparecerán aquí, encima de cualquier otra ventana."
+      : "Este navegador no permite ventanas siempre encima; se ha abierto una ventana normal." });
+  }
+
+  function actualizarPip() {
+    if (!pipWin || pipWin.closed) return;
+    const d = pipWin.document, list = d.getElementById("pipList"), res = d.getElementById("pipResumen");
+    if (!list) return;
+    const now = Date.now();
+    const activos = state.monitors.filter(m => !m.paused).length;
+    res.textContent = `${activos} de ${state.monitors.length} activas`;
+    list.innerHTML = state.monitors.map(m => {
+      const st = m.paused ? "paused" : m.status;
+      const c = m.paused ? "en pausa" : m.busy ? "comprobando" : fmtCountdown(Math.max(0, Math.ceil(((m.nextAt || now) - now) / 1000)));
+      return `<li><span class="dot d-${st}"></span><span class="h" title="${esc(m.url)}">${esc(host(m.url))}</span><span class="c">${c}</span></li>`;
+    }).join("") || `<li>Sin páginas vigiladas.</li>`;
+  }
+
+  $("#btnPip").onclick = abrirPip;
+
+  $("#btnTest").onclick = () => {
+    toast({
+      kind: "changed", sticky: true,
+      title: "Aviso de prueba",
+      url: location.href,
+      summary: "Así se verá un cambio detectado",
+      htmlBody: `<span class="del">− Precio: <mark>24,99</mark> €</span>\n<span class="add">+ Precio: <mark>19,99</mark> €</span>`
+    });
+    beep();
+    if (state.settings.system && "Notification" in window && Notification.permission === "granted") {
+      try { new Notification("Vigía: aviso de prueba", { body: "Las notificaciones del sistema funcionan." }); } catch (_) {}
     }
   };
+
+  function mostrarPermiso() {
+    const el = $("#permInfo");
+    if (!("Notification" in window)) { el.textContent = "Notificaciones del sistema: no disponibles en este navegador."; return; }
+    const p = Notification.permission;
+    el.textContent = p === "granted" ? "Notificaciones del sistema: permitidas."
+      : p === "denied" ? "Notificaciones del sistema: bloqueadas (cámbialo en el icono junto a la dirección)."
+      : "Notificaciones del sistema: sin decidir.";
+  }
+  mostrarPermiso();
+
+  let actx = null;
+  document.addEventListener("pointerdown", () => {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === "suspended") actx.resume();
+    } catch (_) {}
+  }, { once: false, passive: true });
+
+  function beep() {
+    if (!state.settings.sound || !actx) return;
+    try {
+      const t = actx.currentTime;
+      [880, 1318].forEach((f, i) => {
+        const o = actx.createOscillator(), g = actx.createGain(), s = t + i * 0.18;
+        o.type = "sine"; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, s);
+        g.gain.exponentialRampToValueAtTime(0.25, s + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, s + 0.17);
+        o.connect(g).connect(actx.destination);
+        o.start(s); o.stop(s + 0.2);
+      });
+    } catch (_) {}
+  }
+
+  /* ---------- Historial ---------- */
+  function addLog(m, kind, text) {
+    state.log.unshift({ t: Date.now(), kind, url: m.url, text });
+    state.log = state.log.slice(0, 100);
+    renderLog();
+  }
+  function renderLog() {
+    const ul = $("#log");
+    if (!state.log.length) { ul.innerHTML = `<li><span style="color:var(--muted)">Aquí aparecerán los cambios detectados.</span></li>`; return; }
+    ul.innerHTML = state.log.slice(0, 40).map(l => `
+      <li><time>${esc(dt(l.t))}</time>
+      <span><span class="k-${l.kind}">${esc(l.text)}</span><br><span style="color:var(--muted);word-break:break-all">${esc(l.url)}</span></span></li>`).join("");
+  }
+  $("#clearLog").onclick = () => { state.log = []; save(); renderLog(); };
+
+  /* ---------- Lista de monitores ---------- */
+  function renderList() {
+    const box = $("#list");
+    if (!state.monitors.length) {
+      box.innerHTML = `<div class="empty">Todavía no vigilas ninguna página. Añade una dirección arriba para empezar.</div>`;
+      return;
+    }
+    box.innerHTML = state.monitors.map(m => {
+      const status = m.paused ? "paused" : m.status;
+      const opts = [`Cada ${fmtDur(m.interval)}`, m.mode === "html" ? "HTML completo" : "Texto visible"];
+      if (m.selector) opts.push(`zona: ${m.selector}`);
+      if (m.via) opts.push(`acceso: ${m.via === "direct" ? "directo" : m.via}`);
+      const nReglas = reglasIgnorar(m).length;
+      if (nReglas) opts.push(`${nReglas} ${nReglas === 1 ? "filtro" : "filtros"}`);
+      return `
+      <article class="mon" data-status="${status}" data-id="${m.id}">
+        <div class="ring" aria-hidden="true">
+          <svg width="64" height="64"><circle class="track" cx="32" cy="32" r="27" fill="none" stroke-width="5"/>
+          <circle class="bar" cx="32" cy="32" r="27" fill="none" stroke-width="5" stroke-linecap="round"
+            stroke-dasharray="${RING_C}" stroke-dashoffset="${RING_C}"/></svg>
+          <span data-count>…</span>
+        </div>
+        <div>
+          <a class="url" href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.url)}</a>
+          ${m.changes ? `<span class="badge">${m.changes} ${m.changes === 1 ? "cambio" : "cambios"}</span>` : ""}
+          <div class="meta">${esc(opts.join(", "))}</div>
+          <div class="meta">Última comprobación: ${esc(hms(m.lastCheck))}. Último cambio: ${esc(dt(m.lastChange))}.</div>
+          <p class="msg ${m.status === "error" ? "err" : ""}">${m.paused ? "En pausa." : esc(m.message || "Esperando la primera comprobación…")}</p>
+          <div class="actions">
+            <button class="small" type="button" data-act="now" ${m.busy ? "disabled" : ""}>Comprobar ahora</button>
+            <button class="small" type="button" data-act="edit">Ajustes</button>
+            <button class="small" type="button" data-act="pause">${m.paused ? "Reanudar" : "Pausar"}</button>
+            <button class="small" type="button" data-act="reset" title="Toma la versión actual como nueva referencia">Reiniciar referencia</button>
+            <button class="small danger" type="button" data-act="del">Quitar</button>
+          </div>
+        </div>
+      </article>`;
+    }).join("");
+    updateRings();
+  }
+
+  $("#list").addEventListener("click", e => {
+    const btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    const m = state.monitors.find(x => x.id === btn.closest(".mon").dataset.id);
+    if (!m) return;
+    switch (btn.dataset.act) {
+      case "now": m.unseen = false; check(m); break;
+      case "edit": abrirAjustes(m); break;
+      case "pause":
+        m.paused = !m.paused;
+        if (!m.paused) m.nextAt = Date.now();
+        save(); renderList(); break;
+      case "reset":
+        m.hash = null; m.lines = null; m.changes = 0; m.unseen = false; m.status = "idle";
+        m.message = "Referencia borrada. Se tomará una nueva ahora.";
+        check(m); break;
+      case "del":
+        if (confirm(`¿Dejar de vigilar ${m.url}?`)) {
+          state.monitors = state.monitors.filter(x => x !== m);
+          save(); renderList();
+        }
+        break;
+    }
+  });
+
+  let editando = null;
+  function abrirAjustes(m) {
+    editando = m;
+    $("#e-url").textContent = m.url;
+    $("#e-interval").value = m.interval;
+    $("#e-mode").value = m.mode;
+    $("#e-selector").value = m.selector || "";
+    $("#e-proxy").value = m.proxy;
+    $("#e-ignore").value = m.ignore || "";
+    $("#e-random").checked = m.random !== false;
+    $("#editDlg").showModal();
+  }
+  $("#e-cancel").onclick = () => $("#editDlg").close();
+  $("#editForm").addEventListener("submit", e => {
+    const m = editando;
+    if (!m) return;
+    const iv = Math.round(Number($("#e-interval").value));
+    if (!iv || iv < 10) {
+      e.preventDefault();
+      toast({ kind: "error", title: "Intervalo demasiado corto", body: "El mínimo es 10 segundos." });
+      return;
+    }
+    const cambiaAcceso = m.proxy !== $("#e-proxy").value;
+    Object.assign(m, {
+      interval: iv,
+      mode: $("#e-mode").value,
+      selector: $("#e-selector").value.trim(),
+      proxy: $("#e-proxy").value,
+      ignore: $("#e-ignore").value,
+      random: $("#e-random").checked,
+      rebase: true, unseen: false
+    });
+    if (cambiaAcceso) m.via = null;
+    if (m.status === "changed") m.status = "ok";
+    m.nextAt = Date.now();
+    editando = null;
+    save(); renderList();
+    toast({ title: "Ajustes guardados", url: m.url, body: "Se tomará una nueva referencia ahora." });
+  });
+
+  function updateRings() {
+    const now = Date.now();
+    state.monitors.forEach(m => {
+      const el = document.querySelector(`.mon[data-id="${m.id}"]`);
+      if (!el) return;
+      const bar = el.querySelector(".bar"), txt = el.querySelector("[data-count]");
+      if (m.paused) { txt.textContent = "❚❚"; bar.style.strokeDashoffset = RING_C; return; }
+      if (m.busy) { txt.textContent = "…"; bar.style.strokeDashoffset = RING_C * 0.7; return; }
+      const left = Math.max(0, Math.ceil(((m.nextAt || now) - now) / 1000));
+      txt.textContent = fmtCountdown(left);
+      const frac = 1 - left / m.interval;
+      bar.style.strokeDashoffset = RING_C * (1 - Math.min(1, Math.max(0, frac)));
+    });
+    actualizarPip();
+  }
+
+  /* ---------- Bucle principal ---------- */
+  function tick() {
+    const now = Date.now();
+    state.monitors.forEach(m => {
+      if (!m.paused && !m.busy && now >= (m.nextAt || 0)) check(m);
+    });
+    updateRings();
+  }
+  setInterval(tick, 1000);
+
+  /* ---------- Formulario ---------- */
+  $("#interval").addEventListener("change", e => {
+    $("#customBox").classList.toggle("hidden", e.target.value !== "custom");
+  });
+
+  $("#addForm").addEventListener("submit", e => {
+    e.preventDefault();
+    let url = $("#url").value.trim();
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    try { new URL(url); } catch { toast({ kind: "error", title: "Dirección no válida", body: "Escribe una URL completa, por ejemplo https://ejemplo.com" }); return; }
+
+    let interval = $("#interval").value === "custom"
+      ? Math.round(Number($("#customVal").value) * Number($("#customUnit").value))
+      : Number($("#interval").value);
+    if (!interval || interval < 10) { toast({ kind: "error", title: "Intervalo demasiado corto", body: "El mínimo es 10 segundos." }); return; }
+
+    const m = {
+      id: uid(), url, interval,
+      mode: $("#mode").value,
+      selector: $("#selector").value.trim(),
+      proxy: $("#proxy").value,
+      ignore: $("#ignore").value,
+      random: $("#random").checked,
+      normVersion: NORM_VERSION,
+      paused: false, hash: null, lines: null, changes: 0,
+      status: "idle", message: "", nextAt: Date.now(), createdAt: Date.now()
+    };
+    state.monitors.unshift(m);
+    save(); renderList();
+    $("#url").value = "";
+    toast({ title: "Vigilando", url, body: `Se comprobará cada ${fmtDur(interval)}.` });
+    check(m);
+  });
+
+  /* ---------- Opciones ---------- */
+  $("#optSound").checked = state.settings.sound;
+  $("#optSystem").checked = state.settings.system && "Notification" in window && Notification.permission === "granted";
+
+  $("#optSound").addEventListener("change", e => {
+    state.settings.sound = e.target.checked; save();
+    if (e.target.checked) setTimeout(beep, 50);
+  });
+
+  $("#optSystem").addEventListener("change", async e => {
+    if (e.target.checked) {
+      if (!("Notification" in window)) {
+        e.target.checked = false;
+        toast({ kind: "error", title: "No disponible", body: "Este navegador no admite notificaciones del sistema." });
+        return;
+      }
+      let p = Notification.permission;
+      if (p === "default") p = await Notification.requestPermission();
+      if (p !== "granted") {
+        e.target.checked = false;
+        mostrarPermiso();
+        toast({ kind: "error", title: "Permiso no concedido", body: "Actívalo desde el icono del candado en la barra de direcciones. En archivos locales (file://) Chromium puede bloquearlo: usa GitHub Pages o localhost." });
+        return;
+      }
+      new Notification("Vigía", { body: "Las notificaciones del sistema están activadas." });
+    }
+    state.settings.system = e.target.checked; save();
+    mostrarPermiso();
+  });
+
+  renderList();
+  renderLog();
 })();
 </script>
-
-
-</body></html>
+</body>
+</html>
