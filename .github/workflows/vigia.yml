@@ -1,0 +1,62 @@
+name: Vigía
+
+on:
+  schedule:
+    # Cada 15 minutos (GitHub puede retrasarlo unos minutos en horas de mucha carga)
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vigia
+  cancel-in-progress: false
+
+jobs:
+  vigilar:
+    # Solo se ejecuta donde el propietario ha creado la variable VIGIA_ACTIVO desde Vigía.
+    # Las copias (forks) no heredan variables ni secretos, así que ahí no hace nada.
+    if: vars.VIGIA_ACTIVO == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Descargar el script
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: vigia
+          persist-credentials: false
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Recuperar estado
+        uses: actions/cache/restore@v4
+        with:
+          path: vigia-estado.json
+          key: vigia-estado-${{ github.run_id }}
+          restore-keys: vigia-estado-
+
+      - name: Instalar dependencias
+        working-directory: vigia
+        run: npm install --no-save --no-package-lock --no-audit --no-fund cheerio@1.0.0
+
+      - name: Comprobar páginas
+        run: node vigia/vigia-action.mjs
+        env:
+          VIGIA_CONFIG: ${{ vars.VIGIA_CONFIG }}
+          VIGIA_CLAVE: ${{ secrets.VIGIA_CLAVE }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_SERVER: ${{ secrets.NTFY_SERVER }}
+          ESTADO: vigia-estado.json
+
+      - name: Guardar estado
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: vigia-estado.json
+          key: vigia-estado-${{ github.run_id }}
