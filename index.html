@@ -1,10 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
-<head>
+<html lang="es"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Página de prueba para Vigía</title>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@700&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@700&amp;family=IBM+Plex+Sans:wght@400;600&amp;display=swap" rel="stylesheet">
 <style>
 :root{--bg:#E8ECF0;--panel:#fff;--ink:#17202A;--muted:#5A6777;--line:#CBD3DC;--signal:#C98E00;--ok:#2B7A50;--err:#B83232}
 @media (prefers-color-scheme:dark){:root{--bg:#0F151C;--panel:#18212B;--ink:#E4E9EE;--muted:#93A1B1;--line:#2A3643;--signal:#F0B323;--ok:#52C28B;--err:#FF7070}}
@@ -41,15 +40,15 @@ code{background:var(--panel);border:1px solid var(--line);border-radius:4px;padd
   <p class="lead">Cada clic cambia el contenido y guarda la nueva versión, para que Vigía lo detecte en su siguiente comprobación.</p>
 
   <div class="card center">
-    <p id="contador" data-n="0">0</p>
-    <p id="frase">Todavía no se ha cambiado nada.</p>
-    <p id="fecha">Versión original</p>
-    <button id="cambiar" type="button">Cambiar contenido</button>
+    <p id="contador" data-n="4">4</p>
+    <p id="frase">Ha llegado una oferta nueva.</p>
+    <p id="fecha">Cambiado el 17/9/2026, 9:19:47</p>
+    <button id="cambiar" type="button" disabled="">Cambiar contenido</button>
     <p id="estado"></p>
   </div>
 
   <!-- Configuración para GitHub (solo se muestra en github.io) -->
-  <section id="ghConfig" hidden>
+  <section id="ghConfig" hidden="">
     <h2>Conexión con GitHub</h2>
     <div class="card">
       <div class="grid">
@@ -67,13 +66,13 @@ code{background:var(--panel);border:1px solid var(--line);border-radius:4px;padd
   </section>
 
   <h2>Cómo probarlo</h2>
-  <ol id="pasosGh" hidden>
+  <ol id="pasosGh" hidden="">
     <li>Sube <code>index.html</code> y <code>prueba.html</code> al repositorio y activa GitHub Pages (Settings → Pages).</li>
     <li>Abre <code id="urlVigia">…/index.html</code> y vigila <code id="urlPrueba">…/prueba.html</code> cada 1 minuto.</li>
     <li>En esta página, rellena la conexión con GitHub y pulsa «Cambiar contenido». Se hará un commit.</li>
     <li>GitHub tarda entre 30 segundos y un par de minutos en publicar la nueva versión. Después, Vigía mostrará el aviso.</li>
   </ol>
-  <ol id="pasosLocal" hidden>
+  <ol id="pasosLocal" hidden="">
     <li>Pon <code>index.html</code> y <code>prueba.html</code> en la misma carpeta y ejecuta ahí <code>python -m http.server 8000</code>.</li>
     <li>Abre <code>http://localhost:8000/index.html</code> y vigila <code>http://localhost:8000/prueba.html</code> cada 30 segundos.</li>
     <li>Abre esta página desde <code>http://localhost:8000/prueba.html</code> y pulsa «Cambiar contenido». La primera vez elige el archivo <code>prueba.html</code> y permite editarlo.</li>
@@ -255,5 +254,6 @@ code{background:var(--panel);border:1px solid var(--line);border-radius:4px;padd
   };
 })();
 </script>
-</body>
-</html>
+
+
+</body></html>
