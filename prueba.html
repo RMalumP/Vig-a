@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Página de prueba para Vigía</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@700&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#E8ECF0;--panel:#fff;--ink:#17202A;--muted:#5A6777;--line:#CBD3DC;--signal:#C98E00;--ok:#2B7A50;--err:#B83232}
+@media (prefers-color-scheme:dark){:root{--bg:#0F151C;--panel:#18212B;--ink:#E4E9EE;--muted:#93A1B1;--line:#2A3643;--signal:#F0B323;--ok:#52C28B;--err:#FF7070}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "IBM Plex Sans",system-ui,sans-serif}
+.wrap{max-width:640px;margin:0 auto;padding:48px 20px}
+h1{font:700 clamp(2rem,6vw,3rem)/1.05 "IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;margin:0 0 8px}
+h2{font:700 1.3rem/1.2 "IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;margin:32px 0 10px}
+.lead{color:var(--muted);margin:0 0 28px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px}
+.center{text-align:center}
+#contador{font:700 clamp(4rem,18vw,7rem)/1 "IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;font-variant-numeric:tabular-nums;margin:0}
+#frase,#fecha{margin:8px 0 0}
+#fecha{color:var(--muted)}
+button{font:inherit;font-weight:600;cursor:pointer;border-radius:10px;border:1px solid var(--ink);background:var(--ink);color:var(--panel);padding:14px 22px;margin-top:22px}
+button:disabled{opacity:.5;cursor:wait}
+button.sec{background:none;color:var(--ink);border-color:var(--line);padding:8px 14px;font-weight:400;font-size:.9rem;margin-top:12px}
+button:focus-visible,input:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
+#estado{min-height:1.5em;margin:14px 0 0;font-size:.92rem}
+#estado a{color:inherit}
+.ok{color:var(--ok)}.err{color:var(--err)}
+label{display:block;font-size:.85rem;font-weight:600;color:var(--muted);margin:12px 0 4px}
+input{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.hint{font-size:.85rem;color:var(--muted);margin:10px 0 0}
+ol{padding-left:1.2em;color:var(--muted);font-size:.93rem}
+code{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:.88em;word-break:break-all}
+@media (max-width:480px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Página de prueba</h1>
+  <p class="lead">Cada clic cambia el contenido y guarda la nueva versión, para que Vigía lo detecte en su siguiente comprobación.</p>
+
+  <div class="card center">
+    <p id="contador" data-n="0">0</p>
+    <p id="frase">Todavía no se ha cambiado nada.</p>
+    <p id="fecha">Versión original</p>
+    <button id="cambiar" type="button">Cambiar contenido</button>
+    <p id="estado"></p>
+  </div>
+
+  <!-- Configuración para GitHub (solo se muestra en github.io) -->
+  <section id="ghConfig" hidden>
+    <h2>Conexión con GitHub</h2>
+    <div class="card">
+      <div class="grid">
+        <div><label for="owner">Usuario u organización</label><input id="owner" autocomplete="off"></div>
+        <div><label for="repo">Repositorio</label><input id="repo" autocomplete="off"></div>
+        <div><label for="path">Ruta del archivo</label><input id="path" autocomplete="off"></div>
+        <div><label for="branch">Rama (vacío = la principal)</label><input id="branch" autocomplete="off" placeholder="main"></div>
+      </div>
+      <label for="token">Token de acceso</label>
+      <input id="token" type="password" autocomplete="off" placeholder="github_pat_…">
+      <p class="hint">Crea un token <em>fine-grained</em> en GitHub (Settings → Developer settings → Personal access tokens), limitado solo a este repositorio y con permiso <strong>Contents: Read and write</strong>. Se guarda únicamente en este navegador, nunca dentro del archivo.</p>
+      <button id="guardarCfg" class="sec" type="button">Guardar conexión</button>
+      <button id="borrarCfg" class="sec" type="button">Borrar token</button>
+    </div>
+  </section>
+
+  <h2>Cómo probarlo</h2>
+  <ol id="pasosGh" hidden>
+    <li>Sube <code>index.html</code> y <code>prueba.html</code> al repositorio y activa GitHub Pages (Settings → Pages).</li>
+    <li>Abre <code id="urlVigia">…/index.html</code> y vigila <code id="urlPrueba">…/prueba.html</code> cada 1 minuto.</li>
+    <li>En esta página, rellena la conexión con GitHub y pulsa «Cambiar contenido». Se hará un commit.</li>
+    <li>GitHub tarda entre 30 segundos y un par de minutos en publicar la nueva versión. Después, Vigía mostrará el aviso.</li>
+  </ol>
+  <ol id="pasosLocal" hidden>
+    <li>Pon <code>index.html</code> y <code>prueba.html</code> en la misma carpeta y ejecuta ahí <code>python -m http.server 8000</code>.</li>
+    <li>Abre <code>http://localhost:8000/index.html</code> y vigila <code>http://localhost:8000/prueba.html</code> cada 30 segundos.</li>
+    <li>Abre esta página desde <code>http://localhost:8000/prueba.html</code> y pulsa «Cambiar contenido». La primera vez elige el archivo <code>prueba.html</code> y permite editarlo.</li>
+  </ol>
+</div>
+
+<script>
+(() => {
+  const FRASES = [
+    "Ha llegado una oferta nueva.", "Se ha publicado un artículo.", "El precio ha bajado.",
+    "Hay stock disponible otra vez.", "Nueva entrada en el tablón.", "Se ha actualizado el horario.",
+    "Ha cambiado el estado del pedido.", "Hay un comentario nuevo."
+  ];
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  const estado = (html, cls = "") => { $("#estado").innerHTML = html; $("#estado").className = cls; };
+  const enGitHub = location.hostname.endsWith(".github.io");
+  const CFG_KEY = "prueba-vigia:github";
+
+  /* ---------- Contenido ---------- */
+  function actualizarPagina() {
+    const c = $("#contador");
+    const n = Number(c.dataset.n) + 1;
+    c.dataset.n = n;
+    c.textContent = n;
+    $("#frase").textContent = FRASES[Math.floor(Math.random() * FRASES.length)];
+    $("#fecha").textContent = "Cambiado el " + new Date().toLocaleString("es-ES");
+  }
+
+  function htmlParaGuardar() {
+    // Copia limpia: sin mensajes de estado, sin valores de formulario, secciones ocultas como al principio
+    const copia = document.documentElement.cloneNode(true);
+    const est = copia.querySelector("#estado"); est.textContent = ""; est.removeAttribute("class");
+    copia.querySelectorAll("input").forEach(i => i.removeAttribute("value"));
+    ["#ghConfig", "#pasosGh", "#pasosLocal"].forEach(s => copia.querySelector(s).setAttribute("hidden", ""));
+    copia.querySelector("#urlVigia").textContent = "…/index.html";
+    copia.querySelector("#urlPrueba").textContent = "…/prueba.html";
+    return "<!DOCTYPE html>\n" + copia.outerHTML + "\n";
+  }
+
+  /* ---------- Modo GitHub ---------- */
+  function cfgInicial() {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(CFG_KEY) || "{}"); } catch {}
+    const owner = location.hostname.replace(/\.github\.io$/, "");
+    const partes = location.pathname.replace(/^\/+/, "").split("/");
+    let repo, path;
+    if (partes.length > 1) { repo = partes.shift(); path = partes.join("/"); }
+    else { repo = `${owner}.github.io`; path = partes.join("/"); }
+    if (!path || path.endsWith("/")) path += "index.html";
+    return Object.assign({ owner, repo, path, branch: "", token: "" }, saved);
+  }
+
+  function leerForm() {
+    return {
+      owner: $("#owner").value.trim(), repo: $("#repo").value.trim(),
+      path: $("#path").value.trim().replace(/^\/+/, ""), branch: $("#branch").value.trim(),
+      token: $("#token").value.trim()
+    };
+  }
+
+  function guardarCfg(cfg) {
+    try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch {}
+  }
+
+  function base64Utf8(str) {
+    const bytes = new TextEncoder().encode(str);
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+
+  async function commitGitHub() {
+    const cfg = leerForm();
+    if (!cfg.owner || !cfg.repo || !cfg.path) throw new Error("Faltan datos del repositorio.");
+    if (!cfg.token) throw new Error("Falta el token de acceso (más abajo).");
+    guardarCfg(cfg);
+
+    const api = `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${cfg.path.split("/").map(encodeURIComponent).join("/")}`;
+    const headers = { "Authorization": `Bearer ${cfg.token}`, "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
+
+    const info = await fetch(api + (cfg.branch ? `?ref=${encodeURIComponent(cfg.branch)}` : ""), { headers, cache: "no-store" });
+    if (!info.ok) throw new Error(mensajeApi(info.status, "leer el archivo"));
+    const { sha } = await info.json();
+
+    const body = {
+      message: `Prueba Vigía: versión ${$("#contador").dataset.n}`,
+      content: base64Utf8(htmlParaGuardar()),
+      sha
+    };
+    if (cfg.branch) body.branch = cfg.branch;
+
+    const res = await fetch(api, { method: "PUT", headers, body: JSON.stringify(body) });
+    if (!res.ok) throw new Error(mensajeApi(res.status, "guardar el cambio"));
+    const data = await res.json();
+    return { commitUrl: data.commit && data.commit.html_url, cfg };
+  }
+
+  function mensajeApi(status, accion) {
+    if (status === 401) return `No se pudo ${accion}: el token no es válido o ha caducado.`;
+    if (status === 403) return `No se pudo ${accion}: el token no tiene permiso Contents de escritura en este repositorio.`;
+    if (status === 404) return `No se pudo ${accion}: no se encuentra el repositorio, la rama o la ruta (o el token no tiene acceso).`;
+    if (status === 409) return `No se pudo ${accion}: hubo otro cambio a la vez. Vuelve a pulsar.`;
+    return `No se pudo ${accion} (error ${status}).`;
+  }
+
+  /* ---------- Modo local (File System Access) ---------- */
+  let handle = null;
+  const idb = (mode, fn) => new Promise((res, rej) => {
+    const r = indexedDB.open("prueba-vigia", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("h");
+    r.onsuccess = () => {
+      const tx = r.result.transaction("h", mode), q = fn(tx.objectStore("h"));
+      tx.oncomplete = () => res(q && q.result); tx.onerror = () => rej(tx.error);
+    };
+    r.onerror = () => rej(r.error);
+  });
+
+  async function escribirLocal() {
+    if (!handle) handle = await idb("readonly", s => s.get("archivo")).catch(() => null);
+    if (!handle) {
+      [handle] = await window.showOpenFilePicker({ types: [{ description: "Página HTML", accept: { "text/html": [".html", ".htm"] } }] });
+      idb("readwrite", s => s.put(handle, "archivo")).catch(() => {});
+    }
+    if ((await handle.queryPermission({ mode: "readwrite" })) !== "granted" &&
+        (await handle.requestPermission({ mode: "readwrite" })) !== "granted") {
+      throw new Error("No se concedió permiso para editar el archivo.");
+    }
+    const w = await handle.createWritable();
+    await w.write(htmlParaGuardar());
+    await w.close();
+  }
+
+  /* ---------- Inicio ---------- */
+  if (enGitHub) {
+    const cfg = cfgInicial();
+    ["owner", "repo", "path", "branch", "token"].forEach(k => $("#" + k).value = cfg[k] || "");
+    $("#ghConfig").hidden = false;
+    $("#pasosGh").hidden = false;
+    const base = location.href.replace(/[^/]*$/, "");
+    $("#urlVigia").textContent = base + "index.html";
+    $("#urlPrueba").textContent = location.href.split("#")[0].split("?")[0];
+    if (!cfg.token) estado("Rellena la conexión con GitHub (más abajo) antes de pulsar.");
+    $("#guardarCfg").onclick = () => { guardarCfg(leerForm()); estado("Conexión guardada en este navegador.", "ok"); };
+    $("#borrarCfg").onclick = () => {
+      $("#token").value = ""; guardarCfg(leerForm());
+      estado("Token borrado de este navegador.", "ok");
+    };
+  } else {
+    $("#pasosLocal").hidden = false;
+    if (!("showOpenFilePicker" in window)) estado("Este navegador no permite editar archivos. Usa Chrome, Edge o Brave; si no, se descargará una copia modificada.", "err");
+  }
+
+  $("#cambiar").onclick = async () => {
+    const btn = $("#cambiar");
+    btn.disabled = true;
+    actualizarPagina();
+    try {
+      if (enGitHub) {
+        estado("Guardando en GitHub…");
+        const { commitUrl, cfg } = await commitGitHub();
+        const actions = `https://github.com/${esc(cfg.owner)}/${esc(cfg.repo)}/actions`;
+        estado(`Commit hecho (versión ${$("#contador").dataset.n}). GitHub Pages lo publicará en uno o dos minutos: puedes seguirlo en <a href="${actions}" target="_blank" rel="noopener">Actions</a>${commitUrl ? ` o ver el <a href="${esc(commitUrl)}" target="_blank" rel="noopener">commit</a>` : ""}.`, "ok");
+      } else if ("showOpenFilePicker" in window) {
+        await escribirLocal();
+        estado(`Guardado en ${esc(handle.name)} (versión ${$("#contador").dataset.n}). Vigía lo verá en su próxima comprobación.`, "ok");
+      } else {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([htmlParaGuardar()], { type: "text/html" }));
+        a.download = "prueba.html"; a.click();
+        estado("Descargada una copia modificada. Reemplaza con ella el prueba.html original.", "err");
+      }
+    } catch (e) {
+      if (e.name === "AbortError") estado("No se eligió ningún archivo, así que el cambio solo se ve aquí.", "err");
+      else estado(esc(e.message), "err");
+    } finally {
+      btn.disabled = false;
+    }
+  };
+})();
+</script>
+</body>
+</html>
