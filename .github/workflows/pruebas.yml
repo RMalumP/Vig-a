@@ -1,0 +1,38 @@
+name: Pruebas
+
+on:
+  push:
+    paths:
+      - "vigia/**"
+      - ".github/workflows/pruebas.yml"
+  pull_request:
+    paths:
+      - "vigia/**"
+      - ".github/workflows/pruebas.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vigia/package-lock.json
+
+      - name: Instalar dependencias
+        working-directory: vigia
+        run: npm ci --no-audit --no-fund
+
+      - name: Pasar las pruebas
+        working-directory: vigia
+        run: npm test

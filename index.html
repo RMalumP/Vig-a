@@ -3,6 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Vigía es una página suelta sin servidor: esta política limita el daño si algún día
+     se colara HTML ajeno. connect-src queda abierto porque el usuario elige sus propios
+     proxies y su propio servidor de ntfy. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src *; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>Vigía · monitor de novedades web</title>
 <link rel="icon" id="favicon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛰️</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -246,6 +251,8 @@ ol.steps li{margin:6px 0}
     <label for="o-token">Token de GitHub</label>
     <input id="o-token" type="password" autocomplete="off" placeholder="github_pat_…">
     <p class="hint">Token <em>fine-grained</em> con «Only select repositories» (este repositorio) y permisos <strong>Actions: Read and write</strong> y <strong>Variables: Read and write</strong>. Se guarda solo en este navegador.</p>
+    <label class="check"><input type="checkbox" id="o-soloSesion"> No guardar el token en este equipo (se olvida al cerrar la pestaña)</label>
+    <p class="hint">Recomendado en ordenadores compartidos: el token deja de estar guardado en el navegador, pero tendrás que pegarlo cada vez que abras Vigía.</p>
     <p id="o-estado" class="hint"></p>
     <div class="actions" style="margin-top:16px;justify-content:flex-end">
       <button type="button" class="small" id="o-cancel">Cancelar</button>
@@ -409,6 +416,16 @@ ol.steps li{margin:6px 0}
             <input id="ntfyServer" type="url" placeholder="https://ntfy.sh">
           </div>
         </div>
+        <details>
+          <summary>Mi servidor de ntfy pide identificación</summary>
+          <div class="row">
+            <div class="grow">
+              <label for="ntfyToken">Token de acceso (opcional)</label>
+              <input id="ntfyToken" type="password" autocomplete="off" placeholder="tk_…">
+            </div>
+          </div>
+          <p class="hint">Solo hace falta en servidores propios con temas protegidos. En ntfy.sh público, déjalo vacío.</p>
+        </details>
         <div class="actions" style="margin-top:10px">
           <button type="button" class="small" id="ntfyTest">Enviar prueba</button>
           <button type="button" class="small" id="ntfyRandom">Generar tema seguro</button>
@@ -520,7 +537,19 @@ ol.steps li{margin:6px 0}
   const NORM_VERSION = 2;
   const MAX_SEEN = 5000;
   let owner = null;
-  try { owner = JSON.parse(localStorage.getItem(OWNER_KEY) || "null"); } catch {}
+  // El token puede guardarse en este equipo (localStorage) o solo mientras dure
+  // la pestaña (sessionStorage), según elija el propietario al entrar.
+  try { owner = JSON.parse(sessionStorage.getItem(OWNER_KEY) || localStorage.getItem(OWNER_KEY) || "null"); } catch {}
+  function guardarOwner(datos, soloSesion) {
+    const donde = soloSesion ? sessionStorage : localStorage;
+    const otro = soloSesion ? localStorage : sessionStorage;
+    try { otro.removeItem(OWNER_KEY); } catch {}
+    try { donde.setItem(OWNER_KEY, JSON.stringify(datos)); } catch {}
+  }
+  function olvidarOwner() {
+    try { localStorage.removeItem(OWNER_KEY); } catch {}
+    try { sessionStorage.removeItem(OWNER_KEY); } catch {}
+  }
   let pipWin = null;
 
   /* =====================================================================
@@ -530,7 +559,7 @@ ol.steps li{margin:6px 0}
     sound: true, repeat: false, system: false, exportSecrets: false, proxyPropio: "",
     quiet: { on: false, desde: "23:00", hasta: "08:00" },
     tg: { on: false, token: "", chat: "" },
-    ntfy: { on: false, server: "https://ntfy.sh", topic: "" }
+    ntfy: { on: false, server: "https://ntfy.sh", topic: "", token: "" }
   };
   let state = { monitors: [], log: [], settings: {} };
   try {
@@ -1097,16 +1126,18 @@ ol.steps li{margin:6px 0}
     if (!j.ok) throw new Error("Telegram: " + (j.description || `error ${res.status}`));
   }
 
-  async function enviarNtfy(server, topic, { titulo, lineas = [], url, silencioso }) {
+  async function enviarNtfy(server, topic, { titulo, lineas = [], url, silencioso }, token = state.settings.ntfy.token) {
     const click = lineas.length === 1 && lineas[0].href ? lineas[0].href : url;
     const res = await fetch((server || "https://ntfy.sh").replace(/\/+$/, ""), {
       method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       body: JSON.stringify({
         topic, title: titulo,
         message: lineas.slice(0, 8).map(l => "• " + recorta(l.text, 200)).join("\n") || url || titulo,
         click: click || undefined, priority: silencioso ? 2 : 4, tags: ["eyes"]
       })
     });
+    if (res.status === 401 || res.status === 403) throw new Error("ntfy: acceso denegado. Si tu servidor pide identificación, pon el token de acceso en los ajustes de ntfy.");
     if (!res.ok) throw new Error(`ntfy: error ${res.status}`);
   }
 
@@ -1590,7 +1621,7 @@ ol.steps li{margin:6px 0}
   $("#optRepeat").checked = S.repeat;
   $("#optSystem").checked = S.system && "Notification" in window && Notification.permission === "granted";
   $("#tgOn").checked = S.tg.on; $("#tgToken").value = S.tg.token; $("#tgChat").value = S.tg.chat;
-  $("#ntfyOn").checked = S.ntfy.on; $("#ntfyTopic").value = S.ntfy.topic; $("#ntfyServer").value = S.ntfy.server;
+  $("#ntfyOn").checked = S.ntfy.on; $("#ntfyTopic").value = S.ntfy.topic; $("#ntfyServer").value = S.ntfy.server; $("#ntfyToken").value = S.ntfy.token || "";
   $("#quietOn").checked = S.quiet.on; $("#quietDesde").value = S.quiet.desde; $("#quietHasta").value = S.quiet.hasta;
   $("#proxyPropio").value = S.proxyPropio;
   $("#exportSecrets").checked = S.exportSecrets;
@@ -1604,6 +1635,7 @@ ol.steps li{margin:6px 0}
   enlazar("#ntfyOn", t => { S.ntfy.on = t.checked; });
   enlazar("#ntfyTopic", t => { S.ntfy.topic = t.value.trim(); }, "input");
   enlazar("#ntfyServer", t => { S.ntfy.server = t.value.trim() || "https://ntfy.sh"; }, "input");
+  enlazar("#ntfyToken", t => { S.ntfy.token = t.value.trim(); }, "input");
   enlazar("#quietOn", t => { S.quiet.on = t.checked; });
   enlazar("#quietDesde", t => { S.quiet.desde = t.value; });
   enlazar("#quietHasta", t => { S.quiet.hasta = t.value; });
@@ -1663,7 +1695,7 @@ ol.steps li{margin:6px 0}
     try {
       await enviarNtfy($("#ntfyServer").value.trim(), topic, {
         titulo: "Vigía: mensaje de prueba", lineas: [{ text: "Los avisos por ntfy funcionan." }], url: location.href.split("#")[0]
-      });
+      }, $("#ntfyToken").value.trim());
       toast({ title: "Prueba enviada", body: "Revisa la app de ntfy." });
     } catch (err) { toast({ kind: "error", title: "No se pudo enviar", body: err.message }); }
   });
@@ -1781,7 +1813,7 @@ ol.steps li{margin:6px 0}
   function recargarOpciones() {
     $("#optSound").checked = S.sound; $("#optRepeat").checked = S.repeat;
     $("#tgOn").checked = S.tg.on; $("#tgToken").value = S.tg.token; $("#tgChat").value = S.tg.chat;
-    $("#ntfyOn").checked = S.ntfy.on; $("#ntfyTopic").value = S.ntfy.topic; $("#ntfyServer").value = S.ntfy.server;
+    $("#ntfyOn").checked = S.ntfy.on; $("#ntfyTopic").value = S.ntfy.topic; $("#ntfyServer").value = S.ntfy.server; $("#ntfyToken").value = S.ntfy.token || "";
     $("#quietOn").checked = S.quiet.on; $("#quietDesde").value = S.quiet.desde; $("#quietHasta").value = S.quiet.hasta;
     $("#proxyPropio").value = S.proxyPropio;
     resumenMovil();
@@ -1842,6 +1874,7 @@ ol.steps li{margin:6px 0}
     $("#o-repo").value = repoPorDefecto();
     $("#o-repo").placeholder = `${propietarioEsperado()}/nombre-del-repositorio`;
     $("#o-token").value = "";
+    $("#o-soloSesion").checked = false;
     $("#o-estado").textContent = "";
     $("#ownerDlg").showModal();
   }
@@ -1864,7 +1897,7 @@ ol.steps li{margin:6px 0}
       const r = await gh(`/repos/${repo}`, { token });
       if (!r.permissions || !(r.permissions.admin || r.permissions.push)) throw new Error("El token no tiene permiso de escritura en ese repositorio.");
       owner = { token, login: yo.login, repo: r.full_name, branch: r.default_branch };
-      localStorage.setItem(OWNER_KEY, JSON.stringify(owner));
+      guardarOwner(owner, $("#o-soloSesion").checked);
       $("#ownerDlg").close();
       history.replaceState(null, "", location.pathname + location.search);
       mostrarPanelOwner();
@@ -1924,7 +1957,12 @@ ol.steps li{margin:6px 0}
       pick(m, ["id", "url", "interval", "watch", "mode", "selector", "ignore", "keywords", "random", "numCond", "numValor", "hDesde", "hHasta", "laborables"]),
       { zona }));
     const valor = JSON.stringify({ version: 1, actualizado: new Date().toISOString(), monitors });
-    if (valor.length > 47000) { toast({ kind: "error", title: "Lista demasiado grande", body: "GitHub admite hasta 48 KB por variable. Reduce filtros o páginas." }); return; }
+    const LIMITE = 47000; // GitHub admite 48 KB por variable
+    if (valor.length > LIMITE) { toast({ kind: "error", title: "Lista demasiado grande", body: "GitHub admite hasta 48 KB por variable. Reduce filtros o páginas." }); return; }
+    if (valor.length > LIMITE * 0.8) {
+      toast({ kind: "info", title: "La lista se está quedando sin sitio",
+        body: `Ocupa el ${Math.round(valor.length / LIMITE * 100)} % de lo que admite GitHub. Acorta los filtros o quita páginas antes de llegar al tope.` });
+    }
     try {
       await ponerVariable("VIGIA_CONFIG", valor);
       await ponerVariable("VIGIA_ACTIVO", monitors.length ? "true" : "false");
@@ -1966,7 +2004,7 @@ ol.steps li{margin:6px 0}
   $("#ghLogout").onclick = () => {
     if (!confirm("¿Desconectar el acceso de propietario en este navegador? Lo que ya está en GitHub seguirá funcionando.")) return;
     owner = null;
-    localStorage.removeItem(OWNER_KEY);
+    olvidarOwner();
     mostrarPanelOwner();
     toast({ title: "Desconectado", body: "El token se ha borrado de este navegador." });
   };
