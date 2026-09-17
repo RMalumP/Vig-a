@@ -2,7 +2,7 @@ name: Vigía
 
 on:
   schedule:
-    # Cada 15 minutos (GitHub puede retrasarlo unos minutos en horas de mucha carga)
+    # Cada 5 minutos (GitHub puede retrasarlo unos minutos en horas de mucha carga)
     - cron: "*/5 * * * *"
   workflow_dispatch:
 
@@ -30,7 +30,9 @@ jobs:
       - name: Preparar Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vigia/package-lock.json
 
       - name: Recuperar estado
         uses: actions/cache/restore@v4
@@ -41,7 +43,7 @@ jobs:
 
       - name: Instalar dependencias
         working-directory: vigia
-        run: npm install --no-save --no-package-lock --no-audit --no-fund cheerio@1.0.0
+        run: npm ci --omit=dev --no-audit --no-fund
 
       - name: Comprobar páginas
         run: node vigia/vigia-action.mjs
@@ -52,6 +54,10 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           NTFY_SERVER: ${{ secrets.NTFY_SERVER }}
+          # Solo para servidores ntfy privados que piden identificación.
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+          NTFY_USER: ${{ secrets.NTFY_USER }}
+          NTFY_PASS: ${{ secrets.NTFY_PASS }}
           ESTADO: vigia-estado.json
 
       - name: Guardar estado

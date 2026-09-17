@@ -1,0 +1,4 @@
+node_modules/
+vigia-estado.json
+*.log
+.DS_Store
