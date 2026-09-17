@@ -110,6 +110,22 @@ Además, en cada página puedes afinar con: un **selector CSS** para mirar solo 
 zona, **palabras clave** para que avise solo si aparecen, líneas a **ignorar**, y
 un **horario** (con días laborables) para que no moleste de noche.
 
+### Cuando una web avisa de cambios que no son cambios
+
+Hay páginas que generan código distinto en cada carga (un `id` al azar en una
+etiqueta, un `nonce`, un contador). Vigía lo detecta como cambio, porque lo es,
+aunque a ti no te sirva de nada.
+
+Cuando llegue uno de esos avisos, pulsa **«No avisar de cambios como este»**. Si
+lo único que cambió está dentro del valor de un atributo, Vigía aprende a no
+mirar *ese* atributo de *esa* etiqueta, y nada más: si esa misma etiqueta cambia
+el `href`, o aparece contenido nuevo en la página, te sigue avisando igual. Los
+filtros aprendidos se ven y se borran en **Ajustes** de cada página.
+
+Si el ruido no está en un atributo sino en el texto, Vigía recurre a ignorar esas
+líneas, y en ese caso descarta la regla si fuera a tragarse buena parte de la
+página, para no dejarte sin vigilancia sin avisar.
+
 ## Proxy propio (opcional)
 
 Muchas webs no dejan que otra página lea su contenido (bloqueo CORS). Desde el
