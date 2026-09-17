@@ -63,13 +63,61 @@ export function extraer(raw, m) {
     }
     const r = raices($, m);
     const html = r ? r.map((i, e) => $.html(e)).get().join("\n") : $.html();
-    return lineasDe(html);
+    return lineasDe(partirEtiquetas(html));
   }
   $("script,style,noscript,template,svg,iframe,link,meta").remove();
   $(BLOCK).after("\n");
   const r = raices($, m);
   const texto = r ? r.map((i, e) => $(e).text()).get().join("\n") : $.root().text();
   return texto.split("\n").map(s => s.replace(/\s+/g, " ").trim()).filter(Boolean);
+}
+
+// El HTML minificado viene en una sola línea: así cada etiqueta es su propia
+// línea y tanto los avisos como las reglas de ignorar tienen grano fino.
+export const partirEtiquetas = html => String(html).replace(/(?=<[a-zA-Z/!])/g, "\n");
+
+/* --------------------------------------------- normas («no avisar de esto») */
+// Una norma neutraliza el valor de un atributo concreto ({tag:"link", attr:"id"}),
+// no la línea entera: cualquier otro cambio en esa misma etiqueta sigue avisando.
+const NOMBRE = /^[a-zA-Z_:][\w:.-]*$/;
+const escRe = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+export function normaValida(n) {
+  return !!n && NOMBRE.test(n.attr || "") && (n.tag === "*" || NOMBRE.test(n.tag || ""));
+}
+
+function neutralizar(linea, norma) {
+  const tag = norma.tag || "*";
+  if (tag !== "*" && !new RegExp(`^<${escRe(tag)}\\b`, "i").test(linea.trim())) return linea;
+  return linea.replace(new RegExp(`(\\b${escRe(norma.attr)}\\s*=\\s*)("[^"]*"|'[^']*')`, "gi"), '$1"‹var›"');
+}
+
+export function aplicarNormas(lines, normas) {
+  const buenas = (normas || []).filter(normaValida);
+  if (!buenas.length) return lines;
+  return lines.map(l => buenas.reduce(neutralizar, l));
+}
+
+// Deduce la norma a partir del par de líneas que cambió: si lo único distinto
+// está dentro del valor de un atributo, devuelve qué atributo y de qué etiqueta.
+export function deducirNorma(viejo, nuevo) {
+  if (!viejo || !nuevo || viejo === nuevo) return null;
+  let p = 0;
+  while (p < viejo.length && p < nuevo.length && viejo[p] === nuevo[p]) p++;
+  let s = 0;
+  while (s < viejo.length - p && s < nuevo.length - p && viejo[viejo.length - 1 - s] === nuevo[nuevo.length - 1 - s]) s++;
+  const difA = viejo.slice(p, viejo.length - s), difB = nuevo.slice(p, nuevo.length - s);
+  if (!difA || !difB || difA.length > 80 || difB.length > 80) return null;
+  if (/[<>]/.test(difA + difB)) return null;
+
+  const prefijo = viejo.slice(0, p);
+  const abre = prefijo.lastIndexOf("<");
+  if (abre === -1 || prefijo.slice(abre).includes(">")) return null; // es texto, no un atributo
+  const attr = prefijo.match(/([a-zA-Z_:][\w:.-]*)\s*=\s*["']?[^"'<>]*$/);
+  if (!attr) return null;
+  const tag = prefijo.slice(abre + 1).match(/^([a-zA-Z][\w:-]*)/);
+  const norma = { tag: tag ? tag[1].toLowerCase() : "*", attr: attr[1].toLowerCase() };
+  return normaValida(norma) ? norma : null;
 }
 
 export function limpiarAleatorio(line) {
@@ -82,6 +130,7 @@ export function limpiarAleatorio(line) {
 export function filtrar(lines, m) {
   const reglas = lineasDe(m.ignore);
   let out = reglas.length ? lines.filter(l => !reglas.some(r => l.includes(r))) : lines;
+  out = aplicarNormas(out, m.normas);
   if (m.random !== false) out = out.map(limpiarAleatorio);
   return out;
 }

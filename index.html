@@ -207,6 +207,11 @@ ol.steps li{margin:6px 0}
     <label for="e-ignore">Ignorar líneas que contengan (una por línea)</label>
     <textarea id="e-ignore" rows="3"></textarea>
     <label class="check"><input type="checkbox" id="e-random"> Ignorar códigos aleatorios</label>
+    <div id="e-normasBox" hidden>
+      <label>Filtros aprendidos desde los avisos</label>
+      <p id="e-normas" class="hint" style="margin:0"></p>
+      <button type="button" class="small" id="e-normasClear" style="margin-top:8px">Olvidar estos filtros</button>
+    </div>
 
     <h3>Horario de vigilancia</h3>
     <div class="actions">
@@ -729,7 +734,7 @@ ol.steps li{margin:6px 0}
           r.querySelectorAll('meta[name*="csrf" i],meta[name*="token" i]').forEach(n => n.removeAttribute("content"));
         });
       }
-      return roots.flatMap(r => r.outerHTML.split("\n")).map(s => s.trim()).filter(Boolean);
+      return roots.flatMap(r => partirEtiquetas(r.outerHTML).split("\n")).map(s => s.trim()).filter(Boolean);
     }
     roots.forEach(r => {
       r.querySelectorAll("script,style,noscript,template,svg,iframe,link,meta").forEach(n => n.remove());
@@ -738,6 +743,52 @@ ol.steps li{margin:6px 0}
     return roots.flatMap(r => r.textContent.split("\n"))
       .map(s => s.replace(/\s+/g, " ").trim()).filter(Boolean);
   }
+
+  // El HTML minificado viene en una sola línea: así cada etiqueta es su propia
+  // línea y tanto los avisos como las reglas de ignorar tienen grano fino.
+  const partirEtiquetas = html => String(html).replace(/(?=<[a-zA-Z/!])/g, "\n");
+
+  /* ---------- Normas: «no avisar de cambios como este» ----------
+     Una norma neutraliza el valor de un atributo concreto ({tag:"link", attr:"id"}),
+     no la línea entera: cualquier otro cambio en esa etiqueta sigue avisando. */
+  const NOMBRE_ATTR = /^[a-zA-Z_:][\w:.-]*$/;
+  const escRe = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const normaValida = n => !!n && NOMBRE_ATTR.test(n.attr || "") && (n.tag === "*" || NOMBRE_ATTR.test(n.tag || ""));
+
+  function neutralizar(linea, norma) {
+    const tag = norma.tag || "*";
+    if (tag !== "*" && !new RegExp(`^<${escRe(tag)}\\b`, "i").test(linea.trim())) return linea;
+    return linea.replace(new RegExp(`(\\b${escRe(norma.attr)}\\s*=\\s*)("[^"]*"|'[^']*')`, "gi"), '$1"‹var›"');
+  }
+
+  function aplicarNormas(lines, normas) {
+    const buenas = (normas || []).filter(normaValida);
+    if (!buenas.length) return lines;
+    return lines.map(l => buenas.reduce(neutralizar, l));
+  }
+
+  function deducirNorma(viejo, nuevo) {
+    if (!viejo || !nuevo || viejo === nuevo) return null;
+    let p = 0;
+    while (p < viejo.length && p < nuevo.length && viejo[p] === nuevo[p]) p++;
+    let s = 0;
+    while (s < viejo.length - p && s < nuevo.length - p && viejo[viejo.length - 1 - s] === nuevo[nuevo.length - 1 - s]) s++;
+    const difA = viejo.slice(p, viejo.length - s), difB = nuevo.slice(p, nuevo.length - s);
+    if (!difA || !difB || difA.length > 80 || difB.length > 80) return null;
+    if (/[<>]/.test(difA + difB)) return null;
+
+    const prefijo = viejo.slice(0, p);
+    const abre = prefijo.lastIndexOf("<");
+    if (abre === -1 || prefijo.slice(abre).includes(">")) return null; // es texto, no un atributo
+    const attr = prefijo.match(/([a-zA-Z_:][\w:.-]*)\s*=\s*["']?[^"'<>]*$/);
+    if (!attr) return null;
+    const tag = prefijo.slice(abre + 1).match(/^([a-zA-Z][\w:-]*)/);
+    const norma = { tag: tag ? tag[1].toLowerCase() : "*", attr: attr[1].toLowerCase() };
+    return normaValida(norma) ? norma : null;
+  }
+
+  const mismaNorma = (a, b) => a.tag === b.tag && a.attr === b.attr;
+  const describeNorma = n => `el atributo ${n.attr} de ${n.tag === "*" ? "cualquier etiqueta" : `<${n.tag}>`}`;
 
   function limpiarAleatorio(line) {
     return line
@@ -751,6 +802,7 @@ ol.steps li{margin:6px 0}
   function filtrar(lines, m) {
     const reglas = reglasIgnorar(m);
     let out = reglas.length ? lines.filter(l => !reglas.some(r => l.includes(r))) : lines;
+    out = aplicarNormas(out, m.normas);
     if (m.random !== false) out = out.map(limpiarAleatorio);
     return out;
   }
@@ -1029,19 +1081,42 @@ ol.steps li{margin:6px 0}
       d.removed.slice(pares, pares + 2).forEach(l => parts.push(`<span class="del">− ${fragmento(l)}</span>`));
       preview = parts.length ? parts.join("\n") : "Mismo contenido reordenado o con líneas repetidas.";
     }
-    const unicos = [...new Set(prefijos)];
+    // Lo que cambió dentro del valor de un atributo se puede neutralizar con
+    // precisión; solo si no se puede, se recurre a ignorar la línea entera.
+    const normasNuevas = [];
+    if (d) {
+      const pares = Math.min(d.added.length, d.removed.length);
+      for (let i = 0; i < pares; i++) {
+        const n = deducirNorma(d.removed[i], d.added[i]);
+        if (n && !normasNuevas.some(x => mismaNorma(x, n)) && !(m.normas || []).some(x => mismaNorma(x, n))) normasNuevas.push(n);
+      }
+    }
+    // Una regla que se tragara media página dejaría el aviso ciego: se descarta.
+    const base = m.lines || [];
+    const seguro = p => p.length >= 15 && (base.length < 4 || base.filter(l => l.includes(p)).length <= Math.max(1, base.length * 0.3));
+    const unicos = normasNuevas.length ? [] : [...new Set(prefijos)].filter(seguro);
+
     const titulo = `Cambio en ${host(m.url)}`;
     toast({
       kind: "changed", sticky: true, title: titulo, url: m.url, htmlBody: preview,
       summary: d ? `+${d.added.length} / −${d.removed.length} líneas, ${hms(Date.now())}` : hms(Date.now()),
       onOpen: () => markSeen(m),
-      ignoreLabel: unicos.length ? "No avisar de este tipo de cambio" : null,
+      ignoreLabel: normasNuevas.length || unicos.length ? "No avisar de cambios como este" : null,
       onIgnore: () => {
-        const actuales = reglasIgnorar(m);
-        m.ignore = [...actuales, ...unicos.filter(p => !actuales.includes(p))].join("\n");
+        let cuerpo;
+        if (normasNuevas.length) {
+          m.normas = [...(m.normas || []), ...normasNuevas];
+          cuerpo = `Se dejará de mirar ${normasNuevas.map(describeNorma).join(" y ")}. Cualquier otro cambio en esas etiquetas te seguirá avisando.`;
+        } else {
+          const actuales = reglasIgnorar(m);
+          m.ignore = [...actuales, ...unicos.filter(p => !actuales.includes(p))].join("\n");
+          cuerpo = "Esas líneas se ignorarán a partir de ahora. Puedes revisarlo en Ajustes.";
+        }
         m.rebase = true;
         markSeen(m);
-        toast({ title: "Filtro añadido", url: m.url, body: "Esas líneas se ignorarán a partir de ahora. Puedes revisarlo en Ajustes." });
+        marcarGhPendiente(m);
+        save();
+        toast({ title: "Filtro añadido", url: m.url, body: cuerpo });
       }
     });
     const lineas = d ? [...d.added.slice(0, 8).map(t => ({ text: "+ " + t })), ...d.removed.slice(0, 3).map(t => ({ text: "− " + t }))] : [{ text: "La página ha cambiado." }];
@@ -1379,6 +1454,8 @@ ol.steps li{margin:6px 0}
       if (nKw) opts.push(`${nKw} ${nKw === 1 ? "palabra clave" : "palabras clave"}`);
       const nReglas = reglasIgnorar(m).length;
       if (nReglas) opts.push(`${nReglas} ${nReglas === 1 ? "filtro" : "filtros"}`);
+      const nNormas = (m.normas || []).filter(normaValida).length;
+      if (nNormas) opts.push(`${nNormas} ${nNormas === 1 ? "filtro aprendido" : "filtros aprendidos"}`);
       if (m.hDesde && m.hHasta) opts.push(`de ${m.hDesde} a ${m.hHasta}`);
       if (m.laborables) opts.push("lunes a viernes");
       if (m.via) opts.push(`acceso: ${m.via === "direct" ? "directo" : m.via}`);
@@ -1558,6 +1635,7 @@ ol.steps li{margin:6px 0}
     $("#e-ignore").value = m.ignore || "";
     $("#e-keywords").value = m.keywords || "";
     $("#e-random").checked = m.random !== false;
+    pintarNormas(m);
     $("#e-numCond").value = m.numCond || "cambio";
     $("#e-numValor").value = m.numValor ?? "";
     $("#e-hDesde").value = m.hDesde || "";
@@ -1568,6 +1646,20 @@ ol.steps li{margin:6px 0}
     mostrarOpcionesWatch($("#e-watch"), $("#editForm"));
     $("#editDlg").showModal();
   }
+  function pintarNormas(m) {
+    const normas = (m.normas || []).filter(normaValida);
+    $("#e-normasBox").hidden = !normas.length;
+    if (normas.length) $("#e-normas").textContent = `No se mira ${normas.map(describeNorma).join(", ni ")}.`;
+  }
+  $("#e-normasClear").onclick = () => {
+    if (!editando) return;
+    editando.normas = [];
+    editando.rebase = true;
+    marcarGhPendiente(editando);
+    save();
+    pintarNormas(editando);
+    toast({ title: "Filtros olvidados", url: editando.url, body: "Se tomará una referencia nueva en la próxima comprobación." });
+  };
   $("#e-watch").addEventListener("change", () => mostrarOpcionesWatch($("#e-watch"), $("#editForm")));
   $("#e-cancel").onclick = () => $("#editDlg").close();
   $("#editForm").addEventListener("submit", e => {
@@ -1758,7 +1850,7 @@ ol.steps li{margin:6px 0}
      Exportar e importar
      ===================================================================== */
   const CAMPOS_CONFIG = ["id", "url", "interval", "watch", "mode", "selector", "proxy", "ignore", "keywords", "random",
-    "numCond", "numValor", "hDesde", "hHasta", "laborables", "movil", "cloud", "paused"];
+    "numCond", "numValor", "hDesde", "hHasta", "laborables", "movil", "cloud", "paused", "normas"];
   const pick = (o, campos) => Object.fromEntries(campos.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 
   $("#btnExport").onclick = () => {
@@ -1954,7 +2046,7 @@ ol.steps li{margin:6px 0}
   $("#ghSync").onclick = e => conBoton(e.target, async () => {
     const zona = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const monitors = state.monitors.filter(m => m.cloud && !m.paused).map(m => Object.assign(
-      pick(m, ["id", "url", "interval", "watch", "mode", "selector", "ignore", "keywords", "random", "numCond", "numValor", "hDesde", "hHasta", "laborables"]),
+      pick(m, ["id", "url", "interval", "watch", "mode", "selector", "ignore", "keywords", "random", "numCond", "numValor", "hDesde", "hHasta", "laborables", "normas"]),
       { zona }));
     const valor = JSON.stringify({ version: 1, actualizado: new Date().toISOString(), monitors });
     const LIMITE = 47000; // GitHub admite 48 KB por variable

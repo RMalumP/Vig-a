@@ -140,7 +140,7 @@ async function descargar(url, validador) {
 }
 
 async function revisar(m, st) {
-  const firma = hash(JSON.stringify([m.url, m.watch, m.mode, m.selector, m.ignore, m.random, m.numCond, m.numValor]));
+  const firma = hash(JSON.stringify([m.url, m.watch, m.mode, m.selector, m.ignore, m.random, m.numCond, m.numValor, m.normas]));
   const rebase = st.firma !== firma;
   st.firma = firma;
 

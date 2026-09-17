@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   hash, host, recorta, normTxt, lineasDe, toMin, enHorario,
   extraer, limpiarAleatorio, filtrar, palabras, coincide,
+  partirEtiquetas, aplicarNormas, deducirNorma, normaValida,
   esFeed, leerFeed, leerEnlaces, leerNumero, escTg,
   derivarClave, cifrar, descifrar
 } from "../lib.mjs";
@@ -96,6 +97,82 @@ test("extraer avisa si el selector no encuentra nada", () => {
 
 test("extraer trata el texto plano como líneas", () => {
   assert.deepEqual(extraer("uno\r\ndos\n\n", {}), ["uno", "dos"]);
+});
+
+/* ------------------------------------------- HTML minificado y normas */
+test("partirEtiquetas convierte el HTML minificado en una línea por etiqueta", () => {
+  const min = `<head><link rel="stylesheet"><link id="abc" rel="alternate"></head>`;
+  assert.deepEqual(lineasDe(partirEtiquetas(min)), [
+    "<head>", `<link rel="stylesheet">`, `<link id="abc" rel="alternate">`, "</head>"
+  ]);
+});
+
+test("extraer en modo HTML ya no devuelve la página entera en una línea", () => {
+  const min = `<html><body><div class="a">Uno</div><div class="b">Dos</div></body></html>`;
+  const lineas = extraer(min, { mode: "html", random: false });
+  assert.ok(lineas.length > 4, `esperaba varias líneas, hubo ${lineas.length}`);
+  assert.ok(lineas.some(l => l.startsWith('<div class="a"')));
+});
+
+test("deducirNorma identifica el atributo volátil y su etiqueta", () => {
+  const viejo = `<link id="CBcD1OS554B" rel="alternate" href="https://ejemplo.es/a">`;
+  const nuevo = `<link id="cuxZXs4gyjA" rel="alternate" href="https://ejemplo.es/a">`;
+  assert.deepEqual(deducirNorma(viejo, nuevo), { tag: "link", attr: "id" });
+});
+
+test("deducirNorma se abstiene cuando el cambio es de texto, no de atributo", () => {
+  assert.equal(deducirNorma("<p>Quedan 3 plazas</p>", "<p>Quedan 2 plazas</p>"), null);
+  assert.equal(deducirNorma("Plazo abierto", "Plazo cerrado"), null);
+});
+
+test("deducirNorma se abstiene si cambia la estructura y no un valor", () => {
+  assert.equal(deducirNorma(`<div class="a">`, `<div class="a"><span>`), null);
+  assert.equal(deducirNorma("igual", "igual"), null);
+});
+
+test("aplicarNormas neutraliza solo ese atributo de esa etiqueta", () => {
+  const norma = { tag: "link", attr: "id" };
+  const lineas = [
+    `<link id="CBcD1OS554B" rel="alternate" href="https://ejemplo.es/a">`,
+    `<div id="contenido">Novedades</div>`
+  ];
+  const out = aplicarNormas(lineas, [norma]);
+  assert.equal(out[0], `<link id="‹var›" rel="alternate" href="https://ejemplo.es/a">`);
+  assert.equal(out[1], lineas[1], "el id de otras etiquetas no se toca");
+});
+
+test("con la norma puesta, el id aleatorio deja de contar como cambio", () => {
+  const m = { mode: "html", random: false, normas: [{ tag: "link", attr: "id" }] };
+  const antes = filtrar(extraer(`<html><head><link id="CBcD1OS554B" rel="alternate"></head><body>Hola</body></html>`, m), m);
+  const ahora = filtrar(extraer(`<html><head><link id="cuxZXs4gyjA" rel="alternate"></head><body>Hola</body></html>`, m), m);
+  assert.deepEqual(ahora, antes);
+});
+
+test("pero un cambio real en esa misma etiqueta sí se ve", () => {
+  const m = { mode: "html", random: false, normas: [{ tag: "link", attr: "id" }] };
+  const antes = filtrar(extraer(`<html><head><link id="aaa" href="/v1.css"></head></html>`, m), m);
+  const ahora = filtrar(extraer(`<html><head><link id="bbb" href="/v2.css"></head></html>`, m), m);
+  assert.notDeepEqual(ahora, antes);
+});
+
+test("y un cambio de contenido sigue avisando con la norma puesta", () => {
+  const m = { mode: "html", random: false, normas: [{ tag: "link", attr: "id" }] };
+  const antes = filtrar(extraer(`<html><head><link id="aaa"></head><body><p>Nada</p></body></html>`, m), m);
+  const ahora = filtrar(extraer(`<html><head><link id="bbb"></head><body><p>Plazo abierto</p></body></html>`, m), m);
+  assert.notDeepEqual(ahora, antes);
+});
+
+test("normaValida rechaza nombres que no son atributos", () => {
+  assert.equal(normaValida({ tag: "link", attr: "id" }), true);
+  assert.equal(normaValida({ tag: "*", attr: "data-x" }), true);
+  assert.equal(normaValida({ tag: "link", attr: ".*" }), false);
+  assert.equal(normaValida({ tag: "(a|b)+", attr: "id" }), false);
+  assert.equal(normaValida(null), false);
+});
+
+test("una norma con nombres raros no altera el contenido", () => {
+  const lineas = [`<link id="abc">`];
+  assert.deepEqual(aplicarNormas(lineas, [{ tag: "link", attr: "[a-z]+" }]), lineas);
 });
 
 test("limpiarAleatorio neutraliza identificadores que cambian solos", () => {
