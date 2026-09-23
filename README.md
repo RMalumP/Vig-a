@@ -126,6 +126,11 @@ Si el ruido no está en un atributo sino en el texto, Vigía recurre a ignorar e
 líneas, y en ese caso descarta la regla si fuera a tragarse buena parte de la
 página, para no dejarte sin vigilancia sin avisar.
 
+Si una línea aparece y desaparece sin cambiar (un menú que unas veces se genera y
+otras no), aprende a ignorar esa línea exacta. Y si lo único que cambia es el
+orden de las líneas o cuántas veces se repite alguna, el botón es **«No avisar si
+solo cambia el orden»**: a partir de ahí solo cuenta qué líneas hay.
+
 #### Desde Telegram
 
 Los avisos que llegan por Telegram llevan el mismo botón,

@@ -365,8 +365,10 @@ test("sugerirNovedades ignora la parte fija de una línea que cambia", () => {
 
 test("sugerirNovedades no propone reglas que taparían noticias que empiecen igual", () => {
   const todos = items("a", "b", "c", "d");
-  assert.equal(sugerirNovedades({ nuevos: items("Convocatoria 2026 de ayudas para jóvenes"), todos }), null); // poco texto fijo
-  assert.equal(sugerirNovedades({ nuevos: items("12:30 Hora"), todos }), null); // empieza por cifra
+  // Poco texto fijo: solo esa línea exacta, no todo lo que empiece igual.
+  assert.deepEqual(sugerirNovedades({ nuevos: items("Convocatoria 2026 de ayudas para jóvenes"), todos }),
+    { normas: [], ignore: ["Convocatoria 2026 de ayudas para jóvenes"] });
+  assert.equal(sugerirNovedades({ nuevos: items("12:30 h"), todos }), null); // demasiado corta
 });
 
 test("sugerirNovedades usa el texto entero si no hay cifras y respeta el 30 %", () => {
@@ -387,4 +389,11 @@ test("filtrar aplica las reglas que contienen ‹var› o ‹código›", () => 
 test("sugerirFiltro propone la parte fija si solo aparecen líneas", () => {
   const base = ["a", "b", "c", "d", "Aviso temporal número 7"];
   assert.deepEqual(sugerirFiltro({ added: ["Aviso temporal número 7"], base }), { normas: [], ignore: ["Aviso temporal número"] });
+});
+
+test("sugerirFiltro: una etiqueta que aparece y desaparece se ignora tal cual (seg-social.es)", () => {
+  const ul = '<ul class="col-md-12 listado-menu triangle bordeOut">';
+  const base = ["<html>", "<body>", '<div class="menu">', "<li>Uno", "<li>Dos", "<p>Texto"];
+  assert.deepEqual(sugerirFiltro({ removed: [ul], base }), { normas: [], ignore: [ul] });
+  assert.deepEqual(sugerirFiltro({ added: [ul], base: [...base, ul] }), { normas: [], ignore: [ul] });
 });
