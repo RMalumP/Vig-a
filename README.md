@@ -223,8 +223,9 @@ suelta, te ofrece vigilarla.
 No hay un servidor encendido todo el rato: el bot lo atienden la web y GitHub
 Actions, y cada menú te dice quién te está respondiendo.
 
-- **🟢 Web abierta**: la página de Vigía mira el bot cada 20 segundos y responde
-  al momento. Ve todas las páginas (☁️ las de GitHub y 🖥 las del navegador). Lo
+- **🟢 Web abierta**: la página de Vigía deja siempre una pregunta en espera a
+  Telegram (*long polling*), así que responde en un momento, aunque esté en otra
+  pestaña. Ve todas las páginas (☁️ las de GitHub y 🖥 las del navegador). Lo
   que cambies en páginas de GitHub se envía solo a GitHub si has entrado como
   propietario (`#propietario`).
 - **🟠 Web cerrada**: responde GitHub Actions cuando se ejecuta, así que puede
@@ -238,8 +239,9 @@ añadiendo lo que cambia («· Cualquier cambio · HTML», «· texto»…). En 
 Frecuencia** hay tiempos fijos y **✏️ Personalizada**, donde escribes `90 s`,
 `10 min`, `2 h` o `1 día` (en páginas de GitHub, como mínimo 5 minutos).
 
-GitHub Actions espera 90 segundos antes de responder a algo, por si la web está
-abierta y lo atiende antes.
+GitHub Actions espera 30 segundos antes de responder a algo, por si la web está
+abierta y lo atiende antes. Con el reloj externo del paso 5 cada minuto, con la
+web cerrada el bot contesta en uno o dos minutos.
 
 ### Que lo cambiado en el bot llegue a la web
 
