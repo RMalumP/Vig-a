@@ -65,7 +65,7 @@ test("repartir no confirma más allá de lo ajeno", () => {
 test("menú principal con indicador de quién responde", async () => {
   const web = await atenderTexto("/menu", crearCtx());
   assert.match(web.enviar.texto, /Web abierta/);
-  assert.match(web.enviar.texto, /2 páginas · 2 activas · 🔴 1 con error · 1 aviso en 24 h/);
+  assert.match(web.enviar.texto, /2 páginas: ☁️ 1 en GitHub · 🖥 1 solo web\n2 activas · 🔴 1 con error · 1 aviso en 24 h/);
   assert.ok(datos(web.enviar.teclado).includes("m:l:0"));
   const gh = await atenderTexto("/start", crearCtx({ origen: "actions", editable: false }));
   assert.match(gh.enviar.texto, /Web cerrada/);
@@ -75,10 +75,11 @@ test("menú principal con indicador de quién responde", async () => {
 test("lista y ficha de una página", async () => {
   const ctx = crearCtx();
   const l = await atenderBoton("m:l:0", ctx);
-  assert.deepEqual(datos(l.editar.teclado).slice(0, 2), ["m:p:a1", "m:p:b2"]);
-  assert.match(l.editar.teclado[0][0].text, /🟢 ☁️ seg-social\.es/);
+  assert.deepEqual(datos(l.editar.teclado).slice(0, 5), ["m:l:0:t", "m:l:0:g", "m:l:0:w", "m:p:a1", "m:p:b2"]);
+  assert.match(l.editar.teclado[1][0].text, /🟢 seg-social\.es\S* · ☁️ 15 min/);
+  assert.match(l.editar.teclado[2][0].text, /🔴 roto\.test · 🖥 5 min/);
   const f = await atenderBoton("m:p:a1", ctx);
-  assert.match(f.editar.texto, /Frecuencia:<\/b> cada 15 min/);
+  assert.match(f.editar.texto, /Frecuencia:<\/b> 🖥 web cada 15 min · ☁️ GitHub cada 15 min \(como la web\)/);
   assert.match(f.editar.texto, /Filtros:<\/b> 3 propios/);
   assert.ok(datos(f.editar.teclado).includes("m:pp:a1:1"));
 });
@@ -251,9 +252,9 @@ test("la lista muestra todas las entradas, también las repetidas", async () => 
   ctx.paginas_.push({ ...ctx.paginas_[0], id: "a2", mode: "text", cloud: false });
   const l = await atenderBoton("m:l:0", ctx);
   const textos = l.editar.teclado.flat().map(b => b.text);
-  assert.ok(textos.some(t => /☁️ seg-social\.es\/x\?lang=es · Cualquier cambio · HTML/.test(t)), textos.join("\n"));
-  assert.ok(textos.some(t => /🖥 seg-social\.es\/x\?lang=es · Cualquier cambio · texto/.test(t)));
-  assert.match(l.editar.texto, /Páginas<\/b> \(3\)/);
+  assert.ok(textos.some(t => /seg-social\.es\/x\?lang=es · Cualquier cambio · HTML · ☁️/.test(t)), textos.join("\n"));
+  assert.ok(textos.some(t => /seg-social\.es\/x\?lang=es · Cualquier cambio · texto · 🖥/.test(t)));
+  assert.equal(textos[0], "✅ Todas (3)");
 });
 
 test("frecuencia: 1 y 2 minutos entre las opciones", async () => {
@@ -261,6 +262,45 @@ test("frecuencia: 1 y 2 minutos entre las opciones", async () => {
   const f = await atenderBoton("m:f:a1", ctx);
   const d = datos(f.editar.teclado);
   assert.ok(d.includes("m:fs:a1:60") && d.includes("m:fs:a1:120"));
-  assert.match(f.editar.texto, /mínimo es 1 minuto/);
+  assert.match(f.editar.texto, /Mínimo 10 segundos/);
   assert.ok(f.editar.teclado.every(fila => fila.length <= 3));
+});
+
+test("lista con filtros: GitHub, solo web y todas", async () => {
+  const ctx = crearCtx();
+  const g = await atenderBoton("m:l:0:g", ctx);
+  assert.deepEqual(datos(g.editar.teclado).filter(d => d.startsWith("m:p:")), ["m:p:a1"]);
+  assert.match(g.editar.teclado[0][1].text, /^✅ ☁️ GitHub \(1\)/);
+  const w = await atenderBoton("m:l:0:w", ctx);
+  assert.deepEqual(datos(w.editar.teclado).filter(d => d.startsWith("m:p:")), ["m:p:b2"]);
+  // Todas: primero las de GitHub
+  ctx.paginas_.unshift({ ...ctx.paginas_[1], id: "w0" });
+  const t = await atenderBoton("m:l:0", ctx);
+  assert.deepEqual(datos(t.editar.teclado).filter(d => d.startsWith("m:p:")), ["m:p:a1", "m:p:w0", "m:p:b2"]);
+});
+
+test("frecuencia de GitHub separada de la de la web", async () => {
+  const ctx = crearCtx();
+  const f = await atenderBoton("m:p:a1", ctx);
+  assert.ok(datos(f.editar.teclado).includes("m:fg:a1") && datos(f.editar.teclado).includes("m:f:a1"));
+  const fg = await atenderBoton("m:fg:a1", ctx);
+  assert.match(fg.editar.texto, /en GitHub Actions/);
+  assert.ok(datos(fg.editar.teclado).includes("m:fgs:a1:0"));
+  await atenderBoton("m:fgs:a1:120", ctx);
+  assert.equal(ctx.paginas_[0].intervalGh, 120);
+  assert.equal(ctx.paginas_[0].interval, 900); // la web no cambia
+  const ficha = await atenderBoton("m:p:a1", ctx);
+  assert.match(ficha.editar.texto, /🖥 web cada 15 min · ☁️ GitHub cada 2 min\n/);
+  const pide = await atenderBoton("m:fgp:a1", ctx);
+  assert.match(pide.forzar, /\(ref fg:a1\)/);
+  await atenderTexto("3 min", ctx, pide.forzar);
+  assert.equal(ctx.paginas_[0].intervalGh, 180);
+  await atenderBoton("m:fgs:a1:0", ctx); // igual que la web
+  assert.equal(ctx.paginas_[0].intervalGh, null);
+  // Una página solo web no tiene botón de GitHub, pero se puede pasar a GitHub
+  const w = await atenderBoton("m:p:b2", ctx);
+  assert.ok(!datos(w.editar.teclado).includes("m:fg:b2"));
+  assert.ok(datos(w.editar.teclado).includes("m:nb:b2:1"));
+  await atenderBoton("m:nb:b2:1", ctx);
+  assert.equal(ctx.paginas_[1].cloud, true);
 });

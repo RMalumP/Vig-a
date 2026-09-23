@@ -264,6 +264,22 @@ ol.steps li{margin:6px 0}
     <h3>Avisos</h3>
     <label class="check"><input type="checkbox" id="e-movil"> Enviar también al móvil (Telegram o ntfy)</label>
     <label class="check ownerOnly hidden"><input type="checkbox" id="e-cloud"> Vigilar también desde GitHub Actions</label>
+    <div id="e-ghBox" class="ownerOnly hidden" style="margin-left:26px">
+      <label for="e-intervalGh" style="margin-top:6px">En GitHub Actions, cada</label>
+      <select id="e-intervalGh" style="width:auto">
+        <option value="">Lo mismo que en la web</option>
+        <option value="60">1 minuto</option>
+        <option value="120">2 minutos</option>
+        <option value="300">5 minutos</option>
+        <option value="900">15 minutos</option>
+        <option value="1800">30 minutos</option>
+        <option value="3600">1 hora</option>
+        <option value="10800">3 horas</option>
+        <option value="21600">6 horas</option>
+        <option value="86400">24 horas</option>
+      </select>
+      <p class="hint">La web sigue usando «Cada (segundos)» de arriba mientras está abierta. En GitHub, mínimo 1 minuto.</p>
+    </div>
 
     <p class="hint">Al guardar, la versión actual pasa a ser la nueva referencia, sin avisar.</p>
     <div class="actions" style="margin-top:16px;justify-content:flex-end">
@@ -1780,7 +1796,7 @@ ol.steps li{margin:6px 0}
     box.innerHTML = state.monitors.map(m => {
       const status = m.paused ? "paused" : m.status;
       const w = m.watch || "cambios";
-      const opts = [`Cada ${fmtDur(m.interval)}`];
+      const opts = [m.cloud ? `Cada ${fmtDur(m.interval)} en la web y ${fmtDur(Math.max(60, m.intervalGh || m.interval))} en GitHub` : `Cada ${fmtDur(m.interval)}`];
       if (m.isFeed) opts.push("feed RSS/Atom, avisa de entradas nuevas");
       else {
         opts.push(WATCH_TXT[w]);
@@ -1996,9 +2012,19 @@ ol.steps li{margin:6px 0}
     $("#e-laborables").checked = !!m.laborables;
     $("#e-movil").checked = m.movil !== false;
     $("#e-cloud").checked = !!m.cloud;
+    const selGh = $("#e-intervalGh"), vGh = m.intervalGh ? String(m.intervalGh) : "";
+    selGh.querySelectorAll("option[data-propia]").forEach(o => o.remove());
+    if (vGh && ![...selGh.options].some(o => o.value === vGh)) { // puesta desde el bot a mano
+      const o = new Option(`cada ${fmtDur(Number(vGh))}`, vGh); o.dataset.propia = "1"; selGh.add(o);
+    }
+    selGh.value = vGh;
+    pintarGh();
     mostrarOpcionesWatch($("#e-watch"), $("#editForm"));
     $("#editDlg").showModal();
   }
+  const pintarGh = () => { $("#e-ghBox").style.display = $("#e-cloud").checked ? "" : "none"; };
+  $("#e-cloud").addEventListener("change", pintarGh);
+
   function pintarNormas(m) {
     const normas = (m.normas || []).filter(normaValida);
     const partes = [...normas.map(describeNorma), ...(m.orden === "ignorar" ? ["el orden de las líneas ni cuántas veces se repiten"] : [])];
@@ -2048,6 +2074,7 @@ ol.steps li{margin:6px 0}
       laborables: $("#e-laborables").checked,
       movil: $("#e-movil").checked,
       cloud: owner ? $("#e-cloud").checked : m.cloud,
+      intervalGh: owner ? (Number($("#e-intervalGh").value) || undefined) : m.intervalGh,
       rebase: true, unseen: false, fails: 0
     });
     if (cambiaAcceso) m.via = null;
@@ -2210,7 +2237,7 @@ ol.steps li{margin:6px 0}
      Bot de Telegram: lo que ve y cambia desde la web abierta
      ===================================================================== */
   const vistaBot = m => ({
-    id: m.id, url: m.url, watch: m.watch || "cambios", mode: m.mode || "text", interval: m.interval,
+    id: m.id, url: m.url, watch: m.watch || "cambios", mode: m.mode || "text", interval: m.interval, intervalGh: m.intervalGh || null,
     paused: !!m.paused, cloud: !!m.cloud,
     ignore: reglasIgnorar(m), normas: (m.normas || []).filter(normaValida), orden: m.orden === "ignorar",
     keywords: lineasDe(m.keywords),
@@ -2233,7 +2260,16 @@ ol.steps li{margin:6px 0}
         const m = state.monitors.find(x => x.id === id);
         if (!m) return;
         let filtros = false;
+        let aviso = "";
         if (c.interval != null) { m.interval = Math.max(10, Number(c.interval) || 300); m.nextAt = Math.min(m.nextAt || 0, Date.now() + m.interval * 1000); }
+        if (c.intervalGh !== undefined) {
+          if (!c.intervalGh) delete m.intervalGh;
+          else { m.intervalGh = Math.max(60, Number(c.intervalGh)); if (Number(c.intervalGh) < 60) aviso = ". En GitHub, como mucho cada minuto"; }
+        }
+        if (c.cloud != null) {
+          if (c.cloud && !owner) return { nota: "Para usar GitHub Actions, entra en la web como propietario (#propietario)." };
+          m.cloud = !!c.cloud;
+        }
         if (c.paused != null) { m.paused = !!c.paused; if (!m.paused) m.nextAt = Date.now(); }
         if (c.ignore) { m.ignore = c.ignore.join("\n"); filtros = true; }
         if (c.normas) { m.normas = c.normas; filtros = true; }
@@ -2243,9 +2279,7 @@ ol.steps li{margin:6px 0}
         marcarGhPendiente(m);
         save(); renderList();
         programarEnvioGh();
-        const r = { nota: nota(m) };
-        if (c.interval != null && m.cloud && m.interval < 60) r.nota += ". En GitHub, como mucho cada minuto";
-        return r;
+        return { nota: nota(m) + aviso };
       },
       async cambiarGlobal(c) {
         const g = GLOBAL();
@@ -2297,7 +2331,7 @@ ol.steps li{margin:6px 0}
      La escriben la web y GitHub Actions (cuando se cambia algo desde el bot con
      la web cerrada). Cada página lleva «editado»; al leerla, la web se queda con
      lo más reciente de cada una, y al escribirla fusiona antes para no pisar nada. */
-  const CAMPOS_GH = ["url", "interval", "watch", "mode", "selector", "ignore", "keywords", "random", "numCond", "numValor", "hDesde", "hHasta", "laborables", "normas", "orden", "paused"];
+  const CAMPOS_GH = ["url", "interval", "intervalGh", "watch", "mode", "selector", "ignore", "keywords", "random", "numCond", "numValor", "hDesde", "hHasta", "laborables", "normas", "orden", "paused"];
 
   function anotarBorradoGh(m) {
     const limite = Date.now() - 30 * 86400000;
@@ -2374,7 +2408,7 @@ ol.steps li{margin:6px 0}
       // Van todas, para que el bot las vea con la web cerrada; GitHub Actions
       // solo comprueba las que tienen «cloud».
       monitors: state.monitors.map(m => Object.assign(
-        pick(m, ["id", "url", "interval", "watch", "mode", "selector", "keywords", "random", "numCond", "numValor", "hDesde", "hHasta", "laborables", "orden"]),
+        pick(m, ["id", "url", "interval", "intervalGh", "watch", "mode", "selector", "keywords", "random", "numCond", "numValor", "hDesde", "hHasta", "laborables", "orden"]),
         { ignore: reglasIgnorar(m).join("\n"), normas: (m.normas || []).filter(normaValida), paused: !!m.paused, cloud: !!m.cloud, editado: m.editado || 0, zona })),
       borrados: state.borradosGh || []
     };
@@ -2529,7 +2563,7 @@ ol.steps li{margin:6px 0}
     $("#pc-pages").innerHTML = ms.length ? ms.map(m => {
       const w = m.watch || "cambios";
       const datos = [m.isFeed ? "feed RSS" : WATCH_TXT[w], (w === "nuevo" || w === "cambios") && !m.isFeed ? (m.mode === "html" ? "HTML" : "texto") : "",
-        `cada ${fmtDur(m.interval)}`, `${avisos24(m)} ${avisos24(m) === 1 ? "aviso" : "avisos"} en 24 h`, m.paused ? "en pausa" : "",
+        m.cloud ? `web cada ${fmtDur(m.interval)}, GitHub cada ${fmtDur(Math.max(60, m.intervalGh || m.interval))}` : `cada ${fmtDur(m.interval)}`, `${avisos24(m)} ${avisos24(m) === 1 ? "aviso" : "avisos"} en 24 h`, m.paused ? "en pausa" : "",
         owner && m.cloud ? "GitHub" : ""].filter(Boolean);
       return `<div class="pc-page" data-id="${esc(m.id)}" data-status="${estadoDe(m)}">
         <a class="url" href="${esc(m.url)}" target="_blank" rel="noopener">${esc(direccionCorta(m.url))}</a>
@@ -2672,7 +2706,7 @@ ol.steps li{margin:6px 0}
      Exportar e importar
      ===================================================================== */
   const CAMPOS_CONFIG = ["id", "url", "interval", "watch", "mode", "selector", "proxy", "ignore", "keywords", "random",
-    "numCond", "numValor", "hDesde", "hHasta", "laborables", "movil", "cloud", "paused", "normas", "orden"];
+    "numCond", "numValor", "hDesde", "hHasta", "laborables", "movil", "cloud", "paused", "normas", "orden", "intervalGh"];
   const pick = (o, campos) => Object.fromEntries(campos.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 
   $("#btnExport").onclick = () => {
