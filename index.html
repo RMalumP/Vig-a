@@ -545,6 +545,12 @@ ol.steps li{margin:6px 0}
       </div>
 
       <div class="sub">
+        <h3>Páginas de GitHub</h3>
+        <label class="check" style="margin-top:0"><input type="checkbox" id="movilSoloGh"> Las páginas que vigila GitHub Actions solo avisan al móvil desde GitHub</label>
+        <p class="hint">Así no recibes dos avisos del mismo cambio (uno de la web y otro de GitHub). La web los sigue mostrando aquí, con sonido. Si la desmarcas, con la web abierta te llegarán antes al móvil, pero repetidos.</p>
+      </div>
+
+      <div class="sub">
         <h3>Horario silencioso</h3>
         <label class="check" style="margin-top:0"><input type="checkbox" id="quietOn"> Sin sonido ni notificaciones entre</label>
         <div class="actions" style="margin-top:8px">
@@ -568,6 +574,7 @@ ol.steps li{margin:6px 0}
         <button type="button" class="small primary" id="ghSync">Enviar lista a GitHub</button>
         <button type="button" class="small" id="ghRun">Ejecutar ahora</button>
         <button type="button" class="small" id="ghRefresh">Ver últimas ejecuciones</button>
+        <button type="button" class="small" id="ghLimpiar" title="Los registros antiguos pueden mostrar tu lista de páginas">Borrar registros antiguos</button>
         <button type="button" class="small danger" id="ghLogout">Desconectar</button>
       </div>
       <p class="hint" id="ghEstado"></p>
@@ -670,6 +677,7 @@ ol.steps li{margin:6px 0}
      ===================================================================== */
   const DEF_SETTINGS = {
     sound: true, repeat: false, system: false, exportSecrets: false, proxyPropio: "",
+    movilSoloGh: true, // las páginas de GitHub solo avisan al móvil desde GitHub (sin duplicados)
     quiet: { on: false, desde: "23:00", hasta: "08:00" },
     tg: { on: false, token: "", chat: "" },
     ntfy: { on: false, server: "https://ntfy.sh", topic: "", token: "" },
@@ -1049,7 +1057,7 @@ ol.steps li{margin:6px 0}
       if (m.fails === 3) {
         toast({ kind: "error", title: "No se puede comprobar", url: m.url, body: e.message });
         addLog(m, "error", e.message);
-        if (m.movil !== false) enviarMovil({ titulo: `Vigía no puede comprobar ${host(m.url)}`, lineas: [{ text: e.message }], url: m.url, silencioso: true });
+        if (alMovil(m)) enviarMovil({ titulo: `Vigía no puede comprobar ${host(m.url)}`, lineas: [{ text: e.message }], url: m.url, silencioso: true });
       }
     } finally {
       m.busy = false;
@@ -1389,8 +1397,11 @@ ol.steps li{margin:6px 0}
       }
     }
     if (document.hidden) { unseenTitle++; document.title = `(${unseenTitle}) Novedades · Vigía`; }
-    if (m.movil !== false) enviarMovil({ titulo, lineas, url: abrir, silencioso: silencio, botones });
+    if (alMovil(m)) enviarMovil({ titulo, lineas, url: abrir, silencioso: silencio, botones });
   }
+
+  // Una página que también vigila GitHub Actions ya avisa al móvil desde allí.
+  const alMovil = m => m.movil !== false && !(m.cloud && state.settings.movilSoloGh !== false);
 
   function markSeen(m) { m.unseen = false; if (m.status === "changed") m.status = "ok"; save(); renderList(); }
 
@@ -2117,6 +2128,8 @@ ol.steps li{margin:6px 0}
   enlazar("#ntfyServer", t => { S.ntfy.server = t.value.trim() || "https://ntfy.sh"; }, "input");
   enlazar("#ntfyToken", t => { S.ntfy.token = t.value.trim(); }, "input");
   enlazar("#quietOn", t => { S.quiet.on = t.checked; });
+  $("#movilSoloGh").checked = S.movilSoloGh !== false;
+  enlazar("#movilSoloGh", t => { S.movilSoloGh = t.checked; });
   enlazar("#quietDesde", t => { S.quiet.desde = t.value; });
   enlazar("#quietHasta", t => { S.quiet.hasta = t.value; });
   function resumenMovil() {
@@ -2719,7 +2732,7 @@ ol.steps li{margin:6px 0}
   const pick = (o, campos) => Object.fromEntries(campos.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 
   $("#btnExport").onclick = () => {
-    const settings = pick(S, ["sound", "repeat", "system", "quiet", "proxyPropio", "global"]);
+    const settings = pick(S, ["sound", "repeat", "system", "quiet", "proxyPropio", "global", "movilSoloGh"]);
     if (S.exportSecrets) { settings.tg = S.tg; settings.ntfy = S.ntfy; }
     else settings.ntfy = { server: S.ntfy.server };
     const data = { app: "vigia", version: 1, exportado: new Date().toISOString(),
@@ -2753,7 +2766,7 @@ ol.steps li{margin:6px 0}
       });
       if (data.settings) {
         const d = data.settings;
-        ["sound", "repeat", "proxyPropio"].forEach(k => { if (d[k] !== undefined) S[k] = d[k]; });
+        ["sound", "repeat", "proxyPropio", "movilSoloGh"].forEach(k => { if (d[k] !== undefined) S[k] = d[k]; });
         if (d.quiet) Object.assign(S.quiet, d.quiet);
         if (d.global) {
           S.global = Object.assign({ ignore: "", normas: [], orden: false }, d.global);
@@ -2937,6 +2950,21 @@ ol.steps li{margin:6px 0}
       toast({ title: "Ejecución solicitada", body: "Tardará unos segundos en aparecer en la lista." });
       setTimeout(verEjecuciones, 6000);
     } catch (err) { errorGh(err, "lanzar el workflow"); }
+  });
+
+  // Los registros de las ejecuciones son públicos en repositorios públicos, y los de
+  // antes de VIGIA_GH_TOKEN muestran la lista de páginas: el workflow
+  // «Limpiar registros» borra las ejecuciones de Vigía de hace más de una hora.
+  $("#ghLimpiar").onclick = e => conBoton(e.target, async () => {
+    if (!confirm("¿Borrar las ejecuciones de Vigía de hace más de 1 hora, con sus registros? No se puede deshacer.")) return;
+    try {
+      await gh(`/repos/${owner.repo}/actions/workflows/limpiar-registros.yml/dispatches`, { method: "POST", body: { ref: owner.branch || "main", inputs: { horas: "1" } } });
+      toast({ title: "Borrado en marcha", body: "GitHub tardará un minuto o dos en borrar los registros antiguos." });
+      setTimeout(verEjecuciones, 60000);
+    } catch (err) {
+      if (err.status === 404) toast({ kind: "error", title: "Falta el workflow de limpieza", body: "Sube .github/workflows/limpiar-registros.yml al repositorio (rama principal)." });
+      else errorGh(err, "borrar los registros");
+    }
   });
 
   async function verEjecuciones() {
