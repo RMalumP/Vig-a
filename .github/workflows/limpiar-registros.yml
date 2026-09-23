@@ -1,0 +1,40 @@
+name: Limpiar registros
+
+# Borra ejecuciones antiguas del workflow «Vigía» junto con sus registros. En un
+# repositorio público los registros los puede leer cualquiera, y los de antes de
+# crear VIGIA_GH_TOKEN muestran la lista de páginas vigiladas.
+# Se lanza a mano: desde Vigía («Borrar registros antiguos») o en Actions → Run workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      horas:
+        description: "Borrar las ejecuciones de Vigía de hace más de estas horas"
+        default: "1"
+        required: true
+
+permissions:
+  actions: write
+
+jobs:
+  limpiar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Borrar ejecuciones antiguas de Vigía
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HORAS: ${{ inputs.horas }}
+        run: |
+          case "$HORAS" in ''|*[!0-9]*) echo "«horas» tiene que ser un número entero."; exit 1;; esac
+          hasta=$(date -u -d "-$HORAS hours" +%Y-%m-%dT%H:%M:%SZ)
+          # Primero la lista completa y luego el borrado: borrar mientras se pagina se salta páginas.
+          ids=$(gh api --paginate "repos/$REPO/actions/workflows/vigia.yml/runs?per_page=100&created=%3C$hasta" \
+            --jq '.workflow_runs[] | select(.status == "completed") | .id')
+          total=$(printf '%s\n' "$ids" | grep -c . || true)
+          borradas=0
+          for id in $ids; do
+            if gh api -X DELETE "repos/$REPO/actions/runs/$id" --silent; then borradas=$((borradas + 1)); fi
+          done
+          echo "Borradas $borradas de $total ejecuciones de Vigía anteriores a $hasta."
+          printf '### Limpiar registros\n\nBorradas %s de %s ejecuciones de Vigía anteriores a %s (UTC).\n' "$borradas" "$total" "$hasta" >> "$GITHUB_STEP_SUMMARY"

@@ -104,6 +104,22 @@ públicos, pero GitHub pide usar Actions para tareas del proyecto y podría
 considerar abusivo un uso tan intenso, y algunas webs bloquean a quien las
 consulta tan a menudo. Usa 1 minuto solo para las páginas que lo necesiten.
 
+#### Sin avisos repetidos
+
+Las páginas marcadas para GitHub las revisa GitHub Actions y también la web
+mientras está abierta. Para no recibir dos avisos del mismo cambio, en «Avisos
+al móvil» está marcada **«Las páginas que vigila GitHub Actions solo avisan al
+móvil desde GitHub»**: la web te las sigue mostrando en pantalla, pero el
+mensaje al móvil lo manda GitHub.
+
+#### Borrar registros antiguos
+
+Los registros de las ejecuciones son públicos en repositorios públicos, y los de
+antes de crear `VIGIA_GH_TOKEN` muestran tu lista de páginas. El botón **«Borrar
+registros antiguos»** de la sección GitHub Actions de Vigía (o *Actions →
+Limpiar registros → Run workflow*) borra las ejecuciones de Vigía de hace más de
+una hora.
+
 #### Por qué conviene `VIGIA_CLAVE`
 
 Para saber si una página ha cambiado, Vigía guarda su contenido entre
