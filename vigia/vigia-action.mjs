@@ -1,6 +1,8 @@
 // Vigía para GitHub Actions
 // Lee la lista de páginas de la variable privada VIGIA_CONFIG, las comprueba
 // y avisa por Telegram y/o ntfy. El estado se guarda en ESTADO (caché de Actions).
+// Si la web de Vigía está cerrada, también atiende el bot de Telegram (bot-core.mjs);
+// con el secreto VIGIA_GH_TOKEN guarda en VIGIA_CONFIG lo que se cambie desde el bot.
 
 import { readFile, writeFile, appendFile } from "node:fs/promises";
 import * as cheerio from "cheerio";
@@ -8,12 +10,14 @@ import {
   MAX_SEEN, hash, host, recorta, fmtNum, lineasDe, enHorario,
   raices, extraer, filtrar, palabras, coincide,
   esFeed, leerFeed, leerEnlaces, leerNumero, escTg,
-  sugerirFiltro, sugerirNovedades, describeNorma, mismaNorma, normaValida, repartirUpdates,
+  sugerirFiltro, sugerirNovedades, describeNorma, mismaNorma, normaValida,
   derivarClave, cifrar, descifrar
 } from "./lib.mjs";
+import { repartir, responder as responderBot, COMANDOS, fusionarConfigs, hace } from "./bot-core.mjs";
 
 const ESTADO = process.env.ESTADO || "vigia-estado.json";
 const FILTRADO = 2;
+const MAX_HIST = 10; // avisos recientes por página, para «Últimos avisos» del bot
 const BOT = "_telegram"; // clave del estado reservada para el bot, no es una página
 const TOLERANCIA_MS = 90_000; // el cron de GitHub no es exacto
 const MAX_BYTES = 8 * 1024 * 1024; // páginas enormes: mejor avisar que agotar la memoria
@@ -151,8 +155,23 @@ async function descargar(url, validador) {
   };
 }
 
-// Los filtros aprendidos desde Telegram viven en el estado (el workflow no puede
-// tocar VIGIA_CONFIG) y se suman a los que vienen de la página.
+// Reglas globales (Panel de control de la web o bot): se suman a las de cada página.
+function conGlobal(m) {
+  const g = cfg.global || {};
+  const gIgn = lineasDe(g.ignore), gNor = (g.normas || []).filter(normaValida);
+  if (!gIgn.length && !gNor.length && !g.orden) return m;
+  const normas = [...(m.normas || []).filter(normaValida)];
+  gNor.forEach(n => { if (!normas.some(x => mismaNorma(x, n))) normas.push(n); });
+  return {
+    ...m,
+    ignore: [...new Set([...lineasDe(m.ignore), ...gIgn])].join("\n"),
+    normas,
+    orden: g.orden ? "ignorar" : m.orden
+  };
+}
+
+// Sin VIGIA_GH_TOKEN, los filtros aprendidos desde Telegram viven en el estado
+// (el workflow no puede tocar VIGIA_CONFIG) y se suman a los que vienen de la página.
 function conAprendido(m, st) {
   if (!st.normasBot?.length && !st.ignorarBot?.length && !st.ordenBot) return m;
   return {
@@ -169,7 +188,12 @@ function nuevaReferencia(st) {
   for (const k of ["hash", "lines", "seen", "etag", "modificado"]) delete st[k];
 }
 
+function registrarAviso(st, titulo, lineas = []) {
+  st.hist = [{ t: Date.now(), titulo, linea: lineas[0]?.text || "" }, ...(st.hist || [])].slice(0, MAX_HIST);
+}
+
 async function revisar(m, st) {
+  m = conGlobal(m);
   // FILTRADO: sube cuando cambia cómo se filtran las líneas, para tomar una
   // referencia nueva en vez de avisar de la diferencia.
   const firma = hash(JSON.stringify([FILTRADO, m.url, m.watch, m.mode, m.selector, m.ignore, m.random, m.numCond, m.numValor, m.normas, m.orden]));
@@ -201,7 +225,11 @@ async function revisar(m, st) {
       || (cond === "menor" && !isNaN(lim) && v < lim && v < prev)
       || (cond === "mayor" && !isNaN(lim) && v > lim && v > prev);
     const linea = `${fmtNum(prev)} → ${fmtNum(v)}`;
-    if (ok) await avisar({ titulo: `${v < prev ? "Ha bajado" : "Ha subido"} en ${host(m.url)}`, lineas: [{ text: linea }], url: m.url });
+    if (ok) {
+      const titulo = `${v < prev ? "Ha bajado" : "Ha subido"} en ${host(m.url)}`;
+      registrarAviso(st, titulo, [{ text: linea }]);
+      await avisar({ titulo, lineas: [{ text: linea }], url: m.url });
+    }
     return `${linea}${ok ? " (avisado)" : " (no cumple la condición)"}`;
   }
 
@@ -226,6 +254,7 @@ async function revisar(m, st) {
     st.seen = [...new Set([...claves, ...st.seen])].slice(0, MAX_SEEN);
     if (relevantes.length) {
       const titulo = relevantes.length === 1 ? `Novedad en ${host(m.url)}` : `${relevantes.length} novedades en ${host(m.url)}`;
+      registrarAviso(st, titulo, relevantes);
       const f = sugerirNovedades({ nuevos: relevantes, todos: items, ignore: lineasDe(m.ignore) });
       await avisar({ titulo, lineas: relevantes, url: relevantes.length === 1 && relevantes[0].href ? relevantes[0].href : m.url,
         botones: botonSilenciar(m, st, f, "🔕 No avisar de novedades como esta") });
@@ -259,6 +288,7 @@ async function revisar(m, st) {
   const botones = soloOrden
     ? (m.orden !== "ignorar" ? botonSilenciar(m, st, { normas: [], ignore: [], orden: true }, "🔕 No avisar si solo cambia el orden") : undefined)
     : botonSilenciar(m, st, sugerirFiltro({ added, removed, base: lines, normas: (m.normas || []).filter(normaValida), ignore: lineasDe(m.ignore) }));
+  registrarAviso(st, `Cambio en ${host(m.url)}`, lineas);
   await avisar({ titulo: `Cambio en ${host(m.url)}`, lineas, url: m.url, botones });
   return `cambio +${added.length}/−${removed.length} (avisado)`;
 }
@@ -296,6 +326,22 @@ function quitarFiltro(st, f) {
   if (f.orden) delete st.ordenBot;
 }
 
+// Con VIGIA_GH_TOKEN el filtro va a la lista compartida, y así lo ve la web.
+function aplicarEnConfig(m, f) {
+  const normas = (m.normas || []).filter(normaValida), ignorar = lineasDe(m.ignore);
+  m.normas = [...normas, ...f.normas.filter(n => !normas.some(x => mismaNorma(x, n)))];
+  m.ignore = [...ignorar, ...f.ignore.filter(p => !ignorar.includes(p))].join("\n");
+  if (f.orden) m.orden = "ignorar";
+  editada(m);
+}
+
+function quitarDeConfig(m, f) {
+  m.normas = (m.normas || []).filter(n => !f.normas.some(x => mismaNorma(x, n)));
+  m.ignore = lineasDe(m.ignore).filter(p => !f.ignore.includes(p)).join("\n");
+  if (f.orden) delete m.orden;
+  editada(m);
+}
+
 const mismoChat = (chat, destino) =>
   !!chat && (String(chat.id) === String(destino) || (!!chat.username && `@${chat.username}`.toLowerCase() === String(destino).toLowerCase()));
 
@@ -312,11 +358,11 @@ async function atenderBoton(q, monitors, estado) {
   if (!sug) {
     texto = "Ese aviso es antiguo o su página ya no se vigila desde GitHub: no se ha cambiado nada.";
   } else if (accion === "s") {
-    if (!sug.aplicada) { aplicarFiltro(st, sug); sug.aplicada = true; nuevaReferencia(st); }
+    if (!sug.aplicada) { puedeGuardar ? aplicarEnConfig(m, sug) : aplicarFiltro(st, sug); sug.aplicada = true; nuevaReferencia(st); }
     texto = `🔕 Filtro añadido en ${host(m.url)}. ${describeFiltro(sug)}`;
     botones = [{ text: "↩️ Deshacer", callback_data: `d:${id}` }];
   } else if (accion === "d") {
-    if (sug.aplicada) { quitarFiltro(st, sug); sug.aplicada = false; nuevaReferencia(st); }
+    if (sug.aplicada) { puedeGuardar ? quitarDeConfig(m, sug) : quitarFiltro(st, sug); sug.aplicada = false; nuevaReferencia(st); }
     texto = `↩️ Filtro retirado en ${host(m.url)}: vuelves a recibir avisos de esos cambios.`;
     botones = [{ text: "🔕 Volver a silenciarlo", callback_data: `s:${id}` }];
   } else { await responder("Botón desconocido."); return; }
@@ -335,31 +381,137 @@ async function atenderBoton(q, monitors, estado) {
   return sug ? `página ${idx + 1}: filtro ${accion === "s" ? "añadido" : "retirado"}` : "botón de un aviso antiguo";
 }
 
-// El workflow no tiene servidor que reciba los botones al momento: al empezar
-// cada ejecución pregunta a Telegram qué se ha pulsado desde la anterior.
-async function atenderTelegram(monitors, estado) {
+/* ---------------------------------------------------------------- bot (web cerrada) */
+// Vista de una página para bot-core: lo que hay en VIGIA_CONFIG más lo que
+// sabe el estado (última comprobación, errores, avisos recientes).
+function vista(m, st = {}) {
+  return {
+    id: m.id, url: m.url, watch: m.watch || "cambios", mode: m.mode || "text",
+    interval: Number(m.interval) || 300, paused: !!m.paused, cloud: true,
+    ignore: [...new Set([...lineasDe(m.ignore), ...(st.ignorarBot || [])])],
+    normas: [...(m.normas || []).filter(normaValida), ...(st.normasBot || [])],
+    orden: m.orden === "ignorar" || !!st.ordenBot,
+    keywords: lineasDe(m.keywords),
+    estado: st.fails ? "error" : "ok", mensaje: st.error || "",
+    ultima: st.last || null, ultimoAviso: st.hist?.[0]?.t || null, hist: st.hist || []
+  };
+}
+
+function editada(m) { m.editado = Date.now(); cfgCambiada = true; }
+
+function ctxBot(bot) {
+  const anterior = bot.ultimaEjecucion;
+  return {
+    chat: process.env.TELEGRAM_CHAT_ID,
+    ahora: () => Date.now(),
+    info: () => ({
+      origen: "actions", editable: puedeGuardar, motivo: motivoSoloLectura,
+      lineas: [anterior ? `Ejecución anterior de GitHub Actions: ${hace(anterior)}.` : "Primera ejecución con el bot."]
+    }),
+    paginas: () => cfg.monitors.map(m => vista(m, estado[m.id])),
+    global: () => ({ ignore: lineasDe(cfg.global.ignore), normas: (cfg.global.normas || []).filter(normaValida), orden: !!cfg.global.orden }),
+    async cambiar(id, c) {
+      const m = cfg.monitors.find(x => x.id === id);
+      if (!m) return;
+      if (c.interval != null) m.interval = Math.max(300, Number(c.interval) || 300);
+      if (c.paused != null) { m.paused = !!c.paused; if (!m.paused && estado[id]) estado[id].last = 0; }
+      if (c.ignore) m.ignore = c.ignore.join("\n");
+      if (c.normas) m.normas = c.normas;
+      if (c.orden != null) { if (c.orden) m.orden = "ignorar"; else delete m.orden; }
+      if (c.keywords) m.keywords = c.keywords.join("\n");
+      editada(m);
+      return { nota: "✅ Guardado. La web lo recibirá al abrirse." };
+    },
+    async cambiarGlobal(c) {
+      const g = cfg.global;
+      if (c.ignore) g.ignore = c.ignore.join("\n");
+      if (c.normas) g.normas = c.normas;
+      if (c.orden != null) g.orden = !!c.orden;
+      g.editado = Date.now();
+      cfgCambiada = true;
+      return { nota: "✅ Guardado para todas las páginas." };
+    },
+    async nueva({ url, watch }) {
+      try { url = new URL(url).href; } catch { return { error: "Esa dirección no es válida." }; }
+      if (cfg.monitors.some(m => m.url === url && (m.watch || "cambios") === watch)) return { error: "Esa página ya está en la lista." };
+      const m = { id: Math.random().toString(36).slice(2, 10), url, watch, mode: "text", interval: 900, random: true, creado: Date.now() };
+      cfg.monitors.push(m);
+      editada(m);
+      return { id: m.id, nota: "✅ Añadida: tomaré su referencia en esta misma ejecución." };
+    },
+    async borrar(id) {
+      cfg.monitors = cfg.monitors.filter(m => m.id !== id);
+      cfg.borrados = [...(cfg.borrados || []), { id, t: Date.now() }];
+      delete estado[id];
+      cfgCambiada = true;
+    },
+    ejecutar: async () => "🚀 GitHub Actions ya se está ejecutando ahora mismo."
+  };
+}
+
+// El workflow no tiene servidor que reciba los mensajes al momento: al empezar
+// cada ejecución pregunta a Telegram qué ha llegado desde la anterior. Los
+// botones de sus avisos («s»/«d») son suyos; los menús y comandos, solo si la
+// web no los ha atendido en ESPERA_ACTIONS segundos (señal de que está cerrada).
+async function atenderTelegram(estado) {
   if (!process.env.TELEGRAM_TOKEN || !process.env.TELEGRAM_CHAT_ID) return [];
   const bot = (estado[BOT] ||= {});
+  if (bot.comandos !== COMANDOS.length) {
+    await llamarTelegram("setMyCommands", { commands: COMANDOS.map(([command, description]) => ({ command, description })) })
+      .then(() => { bot.comandos = COMANDOS.length; }).catch(() => {});
+  }
   let updates;
   try { updates = await llamarTelegram("getUpdates", { offset: bot.offset, timeout: 0 }); }
   catch (e) {
     anotar(e.status === 409
-      ? "Tu bot de Telegram tiene un *webhook* activo, así que Vigía no puede leer los botones «No avisar de cambios como este». Quítalo con `deleteWebhook` si no lo usas para otra cosa."
-      : `No se pudieron leer los botones de Telegram — ${e.message}`);
+      ? "Tu bot de Telegram tiene un *webhook* activo, así que Vigía no puede leer sus mensajes ni botones. Quítalo con `deleteWebhook` si no lo usas para otra cosa."
+      : `No se pudieron leer los mensajes de Telegram — ${e.message}`);
     return [];
   }
-  // «s»/«d» son de este workflow; los de la página («ws»/«wd») se dejan en la cola.
-  const { mias, offset } = repartirUpdates(updates, a => a === "s" || a === "d");
+  const { mias, offset } = repartir(updates, { origen: "actions", chat: process.env.TELEGRAM_CHAT_ID });
   const atendidos = new Set(bot.atendidos || []), hechos = [];
-  for (const q of mias) {
-    if (atendidos.has(q.id)) continue;
-    atendidos.add(q.id); // aunque falle la respuesta: el filtro ya está hecho y no se repite
-    try { const r = await atenderBoton(q, monitors, estado); if (r) hechos.push(r); }
-    catch (e) { anotar(`No se pudo atender un botón de Telegram — ${e.message}`); }
+  const ctx = ctxBot(bot);
+  for (const u of mias) {
+    const clave = u.callback_query ? "q" + u.callback_query.id : "u" + u.update_id;
+    if (atendidos.has(clave)) continue;
+    atendidos.add(clave); // aunque falle la respuesta: lo pedido ya está hecho y no se repite
+    try {
+      const pref = String(u.callback_query?.data || "").split(":")[0];
+      if (pref === "s" || pref === "d") { const r = await atenderBoton(u.callback_query, cfg.monitors, estado); if (r) hechos.push(r); }
+      else { await responderBot(u, ctx, llamarTelegram); hechos.push(u.callback_query ? "botón del menú" : "mensaje"); }
+    } catch (e) { anotar(`No se pudo atender un mensaje de Telegram — ${e.message}`); }
   }
-  bot.atendidos = [...atendidos].slice(-200);
+  bot.atendidos = [...atendidos].slice(-300);
   if (offset != null) bot.offset = offset;
+  bot.ultimaEjecucion = Date.now();
   return hechos;
+}
+
+/* ---------------------------------------------------------------- VIGIA_CONFIG */
+const API_VAR = process.env.GITHUB_REPOSITORY && `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/actions/variables/VIGIA_CONFIG`;
+const cabecerasGh = () => ({
+  Authorization: `Bearer ${process.env.VIGIA_GH_TOKEN}`, Accept: "application/vnd.github+json",
+  "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json"
+});
+
+// Lee la versión más reciente (la web pudo enviar algo después de arrancar el
+// job) y de paso comprueba que el token sirve.
+async function leerConfigGh() {
+  const r = await fetch(API_VAR, { headers: cabecerasGh(), signal: AbortSignal.timeout(15_000) });
+  if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status });
+  return JSON.parse((await r.json()).value || "{}");
+}
+
+async function guardarConfig() {
+  if (!cfgCambiada || !puedeGuardar) return;
+  let base = {};
+  try { base = await leerConfigGh(); } catch {}
+  const final = fusionarConfigs(base, cfg);
+  final.actualizado = new Date().toISOString();
+  const valor = JSON.stringify(final);
+  if (valor.length > 47000) { anotar("La lista no cabe en VIGIA_CONFIG (48 KB): no se guardaron los cambios hechos desde el bot. Acorta filtros o quita páginas."); return; }
+  const r = await fetch(API_VAR, { method: "PATCH", headers: cabecerasGh(), body: JSON.stringify({ name: "VIGIA_CONFIG", value: valor }), signal: AbortSignal.timeout(15_000) });
+  if (!r.ok) anotar(`No se pudieron guardar los cambios del bot en VIGIA_CONFIG (HTTP ${r.status}). Revisa que \`VIGIA_GH_TOKEN\` tenga «Variables: Read and write».`);
 }
 
 /* ---------------------------------------------------------------- principal */
@@ -376,19 +528,45 @@ const clave = derivarClave(process.env.VIGIA_CLAVE || process.env.TELEGRAM_TOKEN
 let cfg;
 try { cfg = JSON.parse(process.env.VIGIA_CONFIG || "{}"); }
 catch { console.error("VIGIA_CONFIG no es un JSON válido. Vuelve a pulsar «Enviar lista a GitHub»."); process.exit(1); }
-const monitors = Array.isArray(cfg.monitors) ? cfg.monitors : [];
+
+// Guardar cambios hechos desde el bot exige un token con permiso sobre las variables.
+let puedeGuardar = false, cfgCambiada = false;
+let motivoSoloLectura = "para cambiar ajustes con la web cerrada, crea el secreto VIGIA_GH_TOKEN (ver README).";
+if (process.env.VIGIA_GH_TOKEN && API_VAR) {
+  try { cfg = fusionarConfigs(cfg, await leerConfigGh()); puedeGuardar = true; }
+  catch (e) {
+    motivoSoloLectura = e.status === 401 || e.status === 403
+      ? "VIGIA_GH_TOKEN no tiene permiso «Variables: Read and write» sobre este repositorio."
+      : `no se pudo leer VIGIA_CONFIG (${e.message}).`;
+    anotar(`VIGIA_GH_TOKEN no funciona: ${motivoSoloLectura}`);
+  }
+}
+cfg.monitors = Array.isArray(cfg.monitors) ? cfg.monitors : [];
+cfg.global = { ignore: "", normas: [], orden: false, ...(cfg.global || {}) };
 
 let estado = {};
 try { estado = descifrar(await readFile(ESTADO, "utf8"), clave) || {}; }
 catch { console.log("Sin estado previo válido: se tomarán referencias nuevas."); }
 
 // Olvidar páginas que ya no están en la lista
-for (const id of Object.keys(estado)) if (id !== BOT && !monitors.some(m => m.id === id)) delete estado[id];
+for (const id of Object.keys(estado)) if (id !== BOT && !cfg.monitors.some(m => m.id === id)) delete estado[id];
+
+// Con token, lo aprendido antes solo en el estado pasa a la lista compartida.
+if (puedeGuardar) {
+  for (const m of cfg.monitors) {
+    const st = estado[m.id];
+    if (!st || !(st.normasBot?.length || st.ignorarBot?.length || st.ordenBot)) continue;
+    aplicarEnConfig(m, { normas: st.normasBot || [], ignore: st.ignorarBot || [], orden: !!st.ordenBot });
+    delete st.normasBot; delete st.ignorarBot; delete st.ordenBot;
+  }
+}
 
 const resumen = [];
-for (const r of await atenderTelegram(monitors, estado)) resumen.push(["Telegram", r]);
+for (const r of await atenderTelegram(estado)) resumen.push(["Telegram", r]);
+const monitors = cfg.monitors;
 for (const [idx, m] of monitors.entries()) {
   const st = (estado[m.id] ||= {});
+  if (m.paused) { resumen.push([`Página ${idx + 1}`, "en pausa"]); continue; }
   const intervalo = Math.max(60, Number(m.interval) || 300) * 1000;
   if (st.last && Date.now() - st.last < intervalo - TOLERANCIA_MS) { resumen.push([`Página ${idx + 1}`, "aún no toca"]); continue; }
   if (!enHorario(m)) { resumen.push([`Página ${idx + 1}`, "fuera de horario"]); continue; }
@@ -396,15 +574,18 @@ for (const [idx, m] of monitors.entries()) {
   try {
     const r = await revisar(m, st);
     st.fails = 0;
+    delete st.error;
     resumen.push([`Página ${idx + 1}`, r]);
   } catch (e) {
     st.fails = (st.fails || 0) + 1;
+    st.error = e.message;
     resumen.push([`Página ${idx + 1}`, `error ${st.fails}: ${e.message}`]);
     if (st.fails === 3) await avisar({ titulo: `Vigía no puede comprobar ${host(m.url)}`, lineas: [{ text: e.message }], url: m.url });
   }
 }
 
 await writeFile(ESTADO, cifrar(estado, clave));
+await guardarConfig().catch(e => anotar(`No se pudieron guardar los cambios del bot en VIGIA_CONFIG — ${e.message}`));
 
 // Los registros de Actions son públicos en repositorios públicos: no se muestran las direcciones
 for (const [nombre, r] of resumen) console.log(`• ${nombre}: ${r}`);

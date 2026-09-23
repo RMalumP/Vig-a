@@ -70,6 +70,7 @@ En **Settings → Secrets and variables → Actions → Secrets**:
 | `NTFY_SERVER` | opcional | Solo si usas un servidor propio. |
 | `NTFY_TOKEN` | opcional | Solo si tu servidor de ntfy pide identificación. |
 | `NTFY_USER` / `NTFY_PASS` | opcional | Alternativa a `NTFY_TOKEN`. |
+| `VIGIA_GH_TOKEN` | opcional | Para cambiar ajustes desde el bot de Telegram con la web cerrada (ver «Controlar Vigía desde Telegram»). |
 
 Las variables `VIGIA_CONFIG` y `VIGIA_ACTIVO` no las creas tú: las escribe Vigía
 cuando pulsas **«Enviar lista a GitHub»**.
@@ -175,6 +176,58 @@ texto, para no tapar noticias de verdad que empiecen igual.
 - Solo cuentan las pulsaciones que vienen de tu chat de avisos.
 - Si tu bot tiene un *webhook* configurado, Telegram no deja leer los botones, y
   Vigía te avisará de ello.
+
+## Controlar Vigía desde Telegram
+
+Escribe **/menu** a tu bot. Verás un menú de botones para manejar Vigía desde el
+móvil:
+
+- **📋 Páginas**: la lista de páginas (🟢 bien, 🔵 con aviso, 🔴 error, ⏸ en
+  pausa). Cada una tiene su ficha con modo, frecuencia, estado, último aviso y
+  filtros, y botones para cambiar la **⏱ frecuencia**, ver y quitar sus **🔕
+  filtros** (o añadir uno escribiéndolo), **⏸ pausar**, ver los **📜 últimos
+  avisos** y **🗑 quitarla**.
+- **🌐 Reglas globales**: las mismas del Panel de control.
+- **➕ Añadir página**, **⏸ Pausar todo**, **🚀 Ejecutar GitHub** y **📊 Estado**.
+
+También hay comandos: `/menu`, `/paginas`, `/estado`, `/nueva https://…`,
+`/pausar`, `/reanudar`, `/ejecutar` y `/ayuda`. Si le mandas una dirección
+suelta, te ofrece vigilarla.
+
+### Quién te responde
+
+No hay un servidor encendido todo el rato: el bot lo atienden la web y GitHub
+Actions, y cada menú te dice quién te está respondiendo.
+
+- **🟢 Web abierta**: la página de Vigía mira el bot cada 20 segundos y responde
+  al momento. Ve todas las páginas (☁️ las de GitHub y 🖥 las del navegador). Lo
+  que cambies en páginas de GitHub se envía solo a GitHub si has entrado como
+  propietario (`#propietario`).
+- **🟠 Web cerrada**: responde GitHub Actions cuando se ejecuta, así que puede
+  tardar (GitHub no respeta los 5 minutos: a veces pasan horas). Solo ve las
+  páginas de GitHub. Para poder cambiar cosas, necesita el secreto
+  `VIGIA_GH_TOKEN`; sin él, el bot funciona en **solo lectura** 🔒.
+
+GitHub Actions espera 90 segundos antes de responder a algo, por si la web está
+abierta y lo atiende antes.
+
+### Que lo cambiado en el bot llegue a la web
+
+La lista de páginas de GitHub (`VIGIA_CONFIG`) es la lista compartida. Cada
+página lleva la fecha de su último cambio y, al sincronizar, gana lo más
+reciente de cada una, así que la web y el bot no se pisan:
+
+- Lo que cambies en el bot con la **web abierta** ya está en la web (y se envía
+  a GitHub).
+- Lo que cambies con la **web cerrada** lo guarda GitHub Actions en
+  `VIGIA_CONFIG`, y la web lo recoge al abrirse (y cada 5 minutos mientras está
+  abierta), con un aviso de «Cambios recibidos de GitHub». Hace falta haber
+  entrado como propietario.
+
+Para que GitHub Actions pueda guardar, crea el secreto **`VIGIA_GH_TOKEN`** con
+un token *fine-grained* de este repositorio con **Variables: Read and write**.
+Puedes usar el mismo que usas para entrar como propietario. Si le falta el
+permiso, el resumen de la ejecución lo dice.
 
 ## Proxy propio (opcional)
 

@@ -4,7 +4,7 @@ import {
   hash, host, recorta, normTxt, lineasDe, toMin, enHorario,
   extraer, limpiarAleatorio, filtrar, palabras, coincide,
   partirEtiquetas, aplicarNormas, deducirNorma, normaValida,
-  prefijoComun, sugerirFiltro, sugerirNovedades, describeNorma, repartirUpdates,
+  prefijoComun, sugerirFiltro, sugerirNovedades, describeNorma,
   esFeed, leerFeed, leerEnlaces, leerNumero, escTg,
   derivarClave, cifrar, descifrar
 } from "../lib.mjs";
@@ -323,35 +323,6 @@ test("sugerirFiltro no repite una regla ya puesta y recurre a la parte fija", ()
   const f = sugerirFiltro({ removed: ["Actualizado a las 10:31"], added: ["Actualizado a las 10:32"], ignore: ["Actualizado a las 10:3"] });
   assert.deepEqual(f, { normas: [], ignore: ["Actualizado a las"] });
   assert.equal(sugerirFiltro({ removed: ["Actualizado a las 10:31"], added: ["Actualizado a las 10:32"], ignore: ["Actualizado a las 10:3", "Actualizado a las"] }), null);
-});
-
-/* ------------------------------------ cola de Telegram compartida */
-const boton = (update_id, data) => ({ update_id, callback_query: { id: "q" + update_id, data } });
-const deActions = a => a === "s" || a === "d";
-const deWeb = a => a === "ws" || a === "wd";
-
-test("repartirUpdates recoge lo propio y confirma todo si nada es ajeno", () => {
-  const { mias, offset } = repartirUpdates([boton(1, "s:a"), boton(2, "d:a")], deActions);
-  assert.deepEqual(mias.map(q => q.id), ["q1", "q2"]);
-  assert.equal(offset, 3);
-});
-
-test("repartirUpdates no confirma más allá de una pulsación ajena", () => {
-  const ups = [boton(1, "s:a"), boton(2, "ws:b"), boton(3, "s:c")];
-  const actions = repartirUpdates(ups, deActions);
-  assert.deepEqual(actions.mias.map(q => q.id), ["q1", "q3"]);
-  assert.equal(actions.offset, 2); // la q2 de la página sigue en la cola
-  const web = repartirUpdates(ups, deWeb);
-  assert.deepEqual(web.mias.map(q => q.id), ["q2"]);
-  assert.equal(web.offset, null); // la q1 es de Actions: no se confirma nada
-});
-
-test("repartirUpdates deja los mensajes recientes para detectar el chat", () => {
-  const ahora = 1_000_000_000_000;
-  const msg = (update_id, haceSeg) => ({ update_id, message: { date: ahora / 1000 - haceSeg } });
-  assert.equal(repartirUpdates([msg(1, 7200), boton(2, "s:a")], deActions, ahora).offset, 3);
-  assert.equal(repartirUpdates([msg(1, 60), boton(2, "s:a")], deActions, ahora).offset, null);
-  assert.deepEqual(repartirUpdates([], deActions, ahora), { mias: [], offset: null });
 });
 
 /* ------------------------------------ «No avisar de novedades como esta» */

@@ -58,6 +58,9 @@ jobs:
           NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
           NTFY_USER: ${{ secrets.NTFY_USER }}
           NTFY_PASS: ${{ secrets.NTFY_PASS }}
+          # Opcional: permite guardar en VIGIA_CONFIG lo que se cambie desde el bot
+          # de Telegram con la web cerrada. Token con «Variables: Read and write».
+          VIGIA_GH_TOKEN: ${{ secrets.VIGIA_GH_TOKEN }}
           ESTADO: vigia-estado.json
 
       - name: Guardar estado
