@@ -980,9 +980,12 @@ ol.steps li{margin:6px 0}
     m.seenKind = kind;
   }
 
+  // «orden: ignorar»: solo cuenta qué líneas hay, no su orden ni sus repeticiones.
+  const huella = (lines, m) => hash((m.orden === "ignorar" ? [...new Set(lines)].sort() : lines).join("\n"));
+
   function revisarCambios(m, raw) {
     const lines = filtrar(extract(raw, m), m);
-    const h = hash(lines.join("\n"));
+    const h = huella(lines, m);
     if (m.hash && (m.rebase || m.normVersion !== NORM_VERSION || m.seenKind !== "cambios")) {
       m.status = "ok";
       m.message = `Ajustes aplicados. Nueva referencia guardada (${lines.length} líneas).`;
@@ -1100,34 +1103,45 @@ ol.steps li{margin:6px 0}
     const unicos = normasNuevas.length ? [] : [...new Set(prefijos)].filter(p => seguro(p) && !reglasIgnorar(m).includes(p));
     // Sin parejas útiles (líneas que solo aparecen o solo desaparecen): la parte
     // fija de cada línea, como en los avisos de novedades.
-    const suelta = d && !normasNuevas.length && !unicos.length
-      ? sugerirNovedades({ nuevos: [...d.added, ...d.removed].map(text => ({ text })), todos: base.map(text => ({ text })), ignore: reglasIgnorar(m) })
-      : null;
+    // La línea exacta solo sirve para las que no tienen pareja: las que cambian
+    // cada vez no volverían a coincidir.
+    let suelta = null;
+    if (d && !normasNuevas.length && !unicos.length) {
+      const pares = Math.min(d.added.length, d.removed.length), txt = text => ({ text }), todos = base.map(txt);
+      const cambian = sugerirNovedades({ nuevos: [...d.added.slice(0, pares), ...d.removed.slice(0, pares)].map(txt), todos, ignore: reglasIgnorar(m), exacta: false });
+      const sueltas = sugerirNovedades({ nuevos: [...d.added.slice(pares), ...d.removed.slice(pares)].map(txt), todos, ignore: reglasIgnorar(m) });
+      const todas = [...new Set([...(cambian ? cambian.ignore : []), ...(sueltas ? sueltas.ignore : [])])];
+      if (todas.length) suelta = { normas: [], ignore: todas };
+    }
 
     // La misma propuesta sirve para el botón de aquí y para el de Telegram:
     // pulsar uno deja el otro sin efecto.
+    const soloOrden = d && !d.added.length && !d.removed.length && m.orden !== "ignorar";
     const sug = normasNuevas.length || unicos.length ? nuevaSugerencia(m, { normas: normasNuevas, ignore: normasNuevas.length ? [] : unicos })
-      : suelta ? nuevaSugerencia(m, suelta) : null;
+      : suelta ? nuevaSugerencia(m, suelta)
+      : soloOrden ? nuevaSugerencia(m, { normas: [], ignore: [], orden: true }) : null;
 
     const titulo = `Cambio en ${host(m.url)}`;
     toast({
       kind: "changed", sticky: true, title: titulo, url: m.url, htmlBody: preview,
       summary: d ? `+${d.added.length} / −${d.removed.length} líneas, ${hms(Date.now())}` : hms(Date.now()),
       onOpen: () => markSeen(m),
-      ignoreLabel: sug ? "No avisar de cambios como este" : null,
+      ignoreLabel: sug ? (sug.orden ? "No avisar si solo cambia el orden" : "No avisar de cambios como este") : null,
       onIgnore: () => {
         const ya = sug.aplicada;
         const cuerpo = aprenderFiltro(m, sug);
         toast({ title: ya ? "Ese filtro ya estaba puesto" : "Filtro añadido", url: m.url, body: cuerpo });
       }
     });
-    const lineas = d ? [...d.added.slice(0, 8).map(t => ({ text: "+ " + t })), ...d.removed.slice(0, 3).map(t => ({ text: "− " + t }))] : [{ text: "La página ha cambiado." }];
+    const lineas = !d ? [{ text: "La página ha cambiado." }]
+      : d.added.length || d.removed.length ? [...d.added.slice(0, 8).map(t => ({ text: "+ " + t })), ...d.removed.slice(0, 3).map(t => ({ text: "− " + t }))]
+      : [{ text: "Solo ha cambiado el orden de algunas líneas o cuántas veces se repiten." }];
     registrar(m, titulo, lineas);
     addLog(m, "changed", d ? `Cambio: +${d.added.length} / −${d.removed.length} líneas` : "Cambio detectado");
     if (!sug) addLog(m, "info", d
       ? "Sin botón para silenciar: no se encontró una regla segura para este cambio."
       : "Sin botón para silenciar: no había copia de la versión anterior (página muy grande o almacenamiento lleno).");
-    avisarFuera(m, titulo, lineas, m.url, sug ? [{ text: "🔕 No avisar de cambios como este", callback_data: `ws:${sug.id}` }] : null);
+    avisarFuera(m, titulo, lineas, m.url, sug ? [{ text: sug.orden ? "🔕 No avisar si solo cambia el orden" : "🔕 No avisar de cambios como este", callback_data: `ws:${sug.id}` }] : null);
   }
 
   /* ---------- Filtros aprendidos («No avisar de cambios como este») ---------- */
@@ -1142,16 +1156,20 @@ ol.steps li{margin:6px 0}
   // que de verdad se añadió, para que «Deshacer» no quite filtros anteriores.
   function aprenderFiltro(m, sug) {
     let cuerpo;
-    if (sug.normas.length) {
+    if (sug.orden) {
+      cuerpo = "Ya no avisará si solo cambia el orden de las líneas o cuántas veces se repite alguna. Puedes revisarlo en Ajustes.";
+    } else if (sug.normas.length) {
       cuerpo = `Se dejará de mirar ${sug.normas.map(describeNorma).join(" y ")}. Cualquier otro cambio en esas etiquetas te seguirá avisando.`;
     } else {
       cuerpo = `Se ignorará todo lo que contenga ${sug.ignore.map(p => `«${recorta(p, 60)}»`).join(", ")}. Puedes revisarlo en Ajustes.`;
     }
     if (sug.aplicada) return cuerpo;
     const normas = m.normas || [], actuales = reglasIgnorar(m);
-    sug.puestas = { normas: sug.normas.filter(n => !normas.some(x => mismaNorma(x, n))), ignore: sug.ignore.filter(p => !actuales.includes(p)) };
+    sug.puestas = { normas: sug.normas.filter(n => !normas.some(x => mismaNorma(x, n))), ignore: sug.ignore.filter(p => !actuales.includes(p)),
+      orden: !!sug.orden && m.orden !== "ignorar" };
     m.normas = [...normas, ...sug.puestas.normas];
     m.ignore = [...actuales, ...sug.puestas.ignore].join("\n");
+    if (sug.puestas.orden) m.orden = "ignorar";
     sug.aplicada = true;
     cambiarFiltros(m);
     return cuerpo;
@@ -1162,6 +1180,7 @@ ol.steps li{margin:6px 0}
     const p = sug.puestas || sug;
     m.normas = (m.normas || []).filter(n => !p.normas.some(x => mismaNorma(x, n)));
     m.ignore = reglasIgnorar(m).filter(l => !p.ignore.includes(l)).join("\n");
+    if (p.orden) delete m.orden;
     sug.aplicada = false;
     cambiarFiltros(m);
   }
@@ -1175,13 +1194,16 @@ ol.steps li{margin:6px 0}
   }
 
   // Copia de sugerirNovedades (vigia/lib.mjs).
-  function sugerirNovedades({ nuevos = [], todos = [], ignore = [] }) {
+  function sugerirNovedades({ nuevos = [], todos = [], ignore = [], exacta = true }) {
     const textos = todos.map(i => i.text || "");
     const reglas = [];
     for (const i of nuevos.slice(0, 8)) {
       const t = String(i.text || "").replace(/\s+/g, " ").trim();
-      const r = t.split(/\d/)[0].replace(/[\s:;,.·|(\[–-]+$/, "").trim();
-      if (r.length < 10 || r.length < t.length * 0.5) continue;
+      // La parte fija si es la mayor parte del texto; si no, la línea exacta
+      // (sirve para líneas que aparecen y desaparecen sin cambiar).
+      const fija = t.split(/\d/)[0].replace(/[\s:;,.·|(\[–-]+$/, "").trim();
+      const r = fija.length >= 10 && fija.length >= t.length * 0.5 ? fija : exacta ? t : "";
+      if (r.length < 10) continue;
       if (ignore.includes(r) || reglas.includes(r)) continue;
       if (textos.filter(x => x.includes(r)).length > Math.max(1, textos.length * 0.3)) continue;
       reglas.push(r);
@@ -1817,12 +1839,14 @@ ol.steps li{margin:6px 0}
   }
   function pintarNormas(m) {
     const normas = (m.normas || []).filter(normaValida);
-    $("#e-normasBox").hidden = !normas.length;
-    if (normas.length) $("#e-normas").textContent = `No se mira ${normas.map(describeNorma).join(", ni ")}.`;
+    const partes = [...normas.map(describeNorma), ...(m.orden === "ignorar" ? ["el orden de las líneas ni cuántas veces se repiten"] : [])];
+    $("#e-normasBox").hidden = !partes.length;
+    if (partes.length) $("#e-normas").textContent = `No se mira ${partes.join(", ni ")}.`;
   }
   $("#e-normasClear").onclick = () => {
     if (!editando) return;
     editando.normas = [];
+    delete editando.orden;
     editando.rebase = true;
     marcarGhPendiente(editando);
     save();
@@ -2019,7 +2043,7 @@ ol.steps li{margin:6px 0}
      Exportar e importar
      ===================================================================== */
   const CAMPOS_CONFIG = ["id", "url", "interval", "watch", "mode", "selector", "proxy", "ignore", "keywords", "random",
-    "numCond", "numValor", "hDesde", "hHasta", "laborables", "movil", "cloud", "paused", "normas"];
+    "numCond", "numValor", "hDesde", "hHasta", "laborables", "movil", "cloud", "paused", "normas", "orden"];
   const pick = (o, campos) => Object.fromEntries(campos.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 
   $("#btnExport").onclick = () => {
@@ -2215,7 +2239,7 @@ ol.steps li{margin:6px 0}
   $("#ghSync").onclick = e => conBoton(e.target, async () => {
     const zona = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const monitors = state.monitors.filter(m => m.cloud && !m.paused).map(m => Object.assign(
-      pick(m, ["id", "url", "interval", "watch", "mode", "selector", "ignore", "keywords", "random", "numCond", "numValor", "hDesde", "hHasta", "laborables", "normas"]),
+      pick(m, ["id", "url", "interval", "watch", "mode", "selector", "ignore", "keywords", "random", "numCond", "numValor", "hDesde", "hHasta", "laborables", "normas", "orden"]),
       { zona }));
     const valor = JSON.stringify({ version: 1, actualizado: new Date().toISOString(), monitors });
     const LIMITE = 47000; // GitHub admite 48 KB por variable

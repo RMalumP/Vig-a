@@ -154,9 +154,10 @@ async function descargar(url, validador) {
 // Los filtros aprendidos desde Telegram viven en el estado (el workflow no puede
 // tocar VIGIA_CONFIG) y se suman a los que vienen de la página.
 function conAprendido(m, st) {
-  if (!st.normasBot?.length && !st.ignorarBot?.length) return m;
+  if (!st.normasBot?.length && !st.ignorarBot?.length && !st.ordenBot) return m;
   return {
     ...m,
+    orden: st.ordenBot ? "ignorar" : m.orden,
     normas: [...(m.normas || []), ...(st.normasBot || [])],
     ignore: [m.ignore, ...(st.ignorarBot || [])].filter(Boolean).join("\n")
   };
@@ -171,7 +172,7 @@ function nuevaReferencia(st) {
 async function revisar(m, st) {
   // FILTRADO: sube cuando cambia cómo se filtran las líneas, para tomar una
   // referencia nueva en vez de avisar de la diferencia.
-  const firma = hash(JSON.stringify([FILTRADO, m.url, m.watch, m.mode, m.selector, m.ignore, m.random, m.numCond, m.numValor, m.normas]));
+  const firma = hash(JSON.stringify([FILTRADO, m.url, m.watch, m.mode, m.selector, m.ignore, m.random, m.numCond, m.numValor, m.normas, m.orden]));
   const rebase = st.firma !== firma;
   st.firma = firma;
   m = conAprendido(m, st);
@@ -235,7 +236,8 @@ async function revisar(m, st) {
 
   // Cualquier cambio
   const lines = filtrar(extraer(raw, m), m);
-  const h = hash(lines.join("\n"));
+  // «orden: ignorar»: solo cuenta qué líneas hay, no su orden ni sus repeticiones.
+  const h = hash((m.orden === "ignorar" ? [...new Set(lines)].sort() : lines).join("\n"));
   const antes = st.hash, antesLineas = st.lines;
   st.hash = h;
   st.lines = lines.length <= 3000 ? lines : null;
@@ -250,10 +252,14 @@ async function revisar(m, st) {
   }
   const kws = palabras(m);
   if (kws.length && antesLineas && !added.some(l => coincide(l, kws))) return "cambió, sin palabras clave";
-  const lineas = antesLineas
-    ? [...added.slice(0, 8).map(t => ({ text: "+ " + t })), ...removed.slice(0, 3).map(t => ({ text: "− " + t }))]
-    : [{ text: "La página ha cambiado." }];
-  await avisar({ titulo: `Cambio en ${host(m.url)}`, lineas, url: m.url, botones: botonSilenciar(m, st, sugerirFiltro({ added, removed, base: lines, normas: (m.normas || []).filter(normaValida), ignore: lineasDe(m.ignore) })) });
+  const soloOrden = antesLineas && !added.length && !removed.length;
+  const lineas = !antesLineas ? [{ text: "La página ha cambiado." }]
+    : soloOrden ? [{ text: "Solo ha cambiado el orden de algunas líneas o cuántas veces se repiten." }]
+    : [...added.slice(0, 8).map(t => ({ text: "+ " + t })), ...removed.slice(0, 3).map(t => ({ text: "− " + t }))];
+  const botones = soloOrden
+    ? (m.orden !== "ignorar" ? botonSilenciar(m, st, { normas: [], ignore: [], orden: true }, "🔕 No avisar si solo cambia el orden") : undefined)
+    : botonSilenciar(m, st, sugerirFiltro({ added, removed, base: lines, normas: (m.normas || []).filter(normaValida), ignore: lineasDe(m.ignore) }));
+  await avisar({ titulo: `Cambio en ${host(m.url)}`, lineas, url: m.url, botones });
   return `cambio +${added.length}/−${removed.length} (avisado)`;
 }
 
@@ -269,7 +275,9 @@ function botonSilenciar(m, st, f, texto = "🔕 No avisar de cambios como este")
   return [{ text: texto, callback_data: `s:${id}` }];
 }
 
-const describeFiltro = f => f.normas.length
+const describeFiltro = f => f.orden
+  ? "Ya no avisará si solo cambia el orden de las líneas o cuántas veces se repite alguna."
+  : f.normas.length
   ? `Ya no se mirará ${f.normas.map(describeNorma).join(" y ")}. Cualquier otro cambio en esas etiquetas te seguirá avisando.`
   : `Se ignorará todo lo que contenga ${f.ignore.map(p => `«${recorta(p, 60)}»`).join(", ")}.`;
 
@@ -277,11 +285,13 @@ function aplicarFiltro(st, f) {
   const normas = st.normasBot || [], ignorar = st.ignorarBot || [];
   st.normasBot = [...normas, ...f.normas.filter(n => !normas.some(x => mismaNorma(x, n)))];
   st.ignorarBot = [...ignorar, ...f.ignore.filter(p => !ignorar.includes(p))];
+  if (f.orden) st.ordenBot = true;
 }
 
 function quitarFiltro(st, f) {
   st.normasBot = (st.normasBot || []).filter(n => !f.normas.some(x => mismaNorma(x, n)));
   st.ignorarBot = (st.ignorarBot || []).filter(p => !f.ignore.includes(p));
+  if (f.orden) delete st.ordenBot;
 }
 
 const mismoChat = (chat, destino) =>

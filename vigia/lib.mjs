@@ -147,8 +147,13 @@ export function sugerirFiltro({ added = [], removed = [], base = [], normas = []
   if (lineas.length) return { normas: [], ignore: lineas };
   // Sin parejas útiles (líneas que solo aparecen o solo desaparecen): la parte
   // fija de cada línea, como en los avisos de novedades.
-  const txt = t => ({ text: t });
-  return sugerirNovedades({ nuevos: [...added, ...removed].map(txt), todos: base.map(txt), ignore });
+  // La línea exacta solo sirve para las que no tienen pareja: las que cambian
+  // cada vez no volverían a coincidir.
+  const txt = t => ({ text: t }), todos = base.map(txt);
+  const cambian = sugerirNovedades({ nuevos: [...added.slice(0, pares), ...removed.slice(0, pares)].map(txt), todos, ignore, exacta: false });
+  const sueltas = sugerirNovedades({ nuevos: [...added.slice(pares), ...removed.slice(pares)].map(txt), todos, ignore });
+  const todas = [...new Set([...(cambian?.ignore || []), ...(sueltas?.ignore || [])])];
+  return todas.length ? { normas: [], ignore: todas } : null;
 }
 
 // Para avisos de novedades (líneas, enlaces o entradas nuevas) no hay pareja
@@ -156,13 +161,16 @@ export function sugerirFiltro({ added = [], removed = [], base = [], normas = []
 // («Actualizado a las 10:32»). Se propone ignorar el texto hasta la primera
 // cifra, solo si es la mayor parte del elemento (para no tapar noticias que
 // empiecen igual) y no se traga más del 30 % de lo que hay en la página.
-export function sugerirNovedades({ nuevos = [], todos = [], ignore = [] }) {
+export function sugerirNovedades({ nuevos = [], todos = [], ignore = [], exacta = true }) {
   const textos = todos.map(i => i.text || "");
   const reglas = [];
   for (const i of nuevos.slice(0, 8)) {
     const t = String(i.text || "").replace(/\s+/g, " ").trim();
-    const r = t.split(/\d/)[0].replace(/[\s:;,.·|(\[–-]+$/, "").trim();
-    if (r.length < 10 || r.length < t.length * 0.5) continue;
+    // La parte fija si es la mayor parte del texto; si no, la línea exacta
+    // (sirve para líneas que aparecen y desaparecen sin cambiar).
+    const fija = t.split(/\d/)[0].replace(/[\s:;,.·|(\[–-]+$/, "").trim();
+    const r = fija.length >= 10 && fija.length >= t.length * 0.5 ? fija : exacta ? t : "";
+    if (r.length < 10) continue;
     if (ignore.includes(r) || reglas.includes(r)) continue;
     if (textos.filter(x => x.includes(r)).length > Math.max(1, textos.length * 0.3)) continue;
     reglas.push(r);
