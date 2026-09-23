@@ -248,9 +248,15 @@ añadiendo lo que cambia («· Cualquier cambio · HTML», «· texto»…). En 
 Frecuencia** hay tiempos fijos y **✏️ Personalizada**, donde escribes `90 s`,
 `10 min`, `2 h` o `1 día` (en páginas de GitHub, como mínimo 5 minutos).
 
-GitHub Actions espera 30 segundos antes de responder a algo, por si la web está
-abierta y lo atiende antes. Con el reloj externo del paso 5 cada minuto, con la
-web cerrada el bot contesta en uno o dos minutos.
+GitHub Actions espera 10 segundos antes de responder a algo, por si la web está
+abierta y lo atiende antes. Con la web cerrada, la primera respuesta llega en la
+siguiente ejecución (con el reloj externo del paso 5, en uno o dos minutos).
+
+**Modo escucha.** Cuando GitHub Actions te contesta (un comando, un botón del
+menú o «🔕 No avisar…»), se queda escuchando al bot y responde al momento
+mientras lo sigas usando. Si pasan 10 segundos sin que pulses nada, o como mucho
+4 minutos, termina. Si abres la web mientras tanto, lo nota y le deja el bot a
+ella. Si nadie usa el bot, GitHub no se queda escuchando.
 
 ### Que lo cambiado en el bot llegue a la web
 

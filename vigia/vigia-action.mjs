@@ -471,38 +471,63 @@ function ctxBot(bot) {
 // cada ejecución pregunta a Telegram qué ha llegado desde la anterior. Los
 // botones de sus avisos («s»/«d») son suyos; los menús y comandos, solo si la
 // web no los ha atendido en ESPERA_ACTIONS segundos (señal de que está cerrada).
-async function atenderTelegram(estado) {
-  if (!process.env.TELEGRAM_TOKEN || !process.env.TELEGRAM_CHAT_ID) return [];
+// Devuelve { hechos, conflicto, nadaNuevo }. conflicto: otro getUpdates (la web
+// al abrirse) cortó este. inmediato: modo escucha, la web está cerrada.
+let ctxTelegram = null;
+async function atenderTelegram(estado, { espera = 0, inmediato = false } = {}) {
+  const r = { hechos: [], conflicto: false, nadaNuevo: false };
+  if (!process.env.TELEGRAM_TOKEN || !process.env.TELEGRAM_CHAT_ID) return r;
   const bot = (estado[BOT] ||= {});
+  ctxTelegram ||= ctxBot(bot);
   if (bot.comandos !== COMANDOS.length) {
     await llamarTelegram("setMyCommands", { commands: COMANDOS.map(([command, description]) => ({ command, description })) })
       .then(() => { bot.comandos = COMANDOS.length; }).catch(() => {});
   }
   let updates;
-  try { updates = await llamarTelegram("getUpdates", { offset: bot.offset, timeout: 0 }); }
+  try { updates = await llamarTelegram("getUpdates", { offset: bot.offset, timeout: espera }); }
   catch (e) {
+    if (e.status === 409 && !/webhook/i.test(e.message)) { r.conflicto = true; return r; }
     anotar(e.status === 409
       ? "Tu bot de Telegram tiene un *webhook* activo, así que Vigía no puede leer sus mensajes ni botones. Quítalo con `deleteWebhook` si no lo usas para otra cosa."
       : `No se pudieron leer los mensajes de Telegram — ${e.message}`);
-    return [];
+    return r;
   }
-  const { mias, offset } = repartir(updates, { origen: "actions", chat: process.env.TELEGRAM_CHAT_ID });
-  const atendidos = new Set(bot.atendidos || []), hechos = [];
-  const ctx = ctxBot(bot);
+  const { mias, offset } = repartir(updates, { origen: "actions", chat: process.env.TELEGRAM_CHAT_ID, inmediato });
+  const atendidos = new Set(bot.atendidos || []);
   for (const u of mias) {
     const clave = u.callback_query ? "q" + u.callback_query.id : "u" + u.update_id;
     if (atendidos.has(clave)) continue;
     atendidos.add(clave); // aunque falle la respuesta: lo pedido ya está hecho y no se repite
     try {
       const pref = String(u.callback_query?.data || "").split(":")[0];
-      if (pref === "s" || pref === "d") { const r = await atenderBoton(u.callback_query, cfg.monitors, estado); if (r) hechos.push(r); }
-      else { await responderBot(u, ctx, llamarTelegram); hechos.push(u.callback_query ? "botón del menú" : "mensaje"); }
+      if (pref === "s" || pref === "d") { const x = await atenderBoton(u.callback_query, cfg.monitors, estado); if (x) r.hechos.push(x); }
+      else { await responderBot(u, ctxTelegram, llamarTelegram); r.hechos.push(u.callback_query ? "botón del menú" : "mensaje"); }
     } catch (e) { anotar(`No se pudo atender un mensaje de Telegram — ${e.message}`); }
   }
   bot.atendidos = [...atendidos].slice(-300);
   if (offset != null) bot.offset = offset;
-  bot.ultimaEjecucion = Date.now();
-  return hechos;
+  // Algo en la cola que no se puede confirmar: Telegram lo devolvería al instante otra vez.
+  r.nadaNuevo = !r.hechos.length && updates.some(u => u.update_id >= (bot.offset || 0));
+  return r;
+}
+
+// Modo escucha: si en esta ejecución has usado el bot (la web está cerrada, o
+// habría contestado ella), GitHub Actions se queda escuchando y contesta al
+// momento, hasta ESCUCHA_MS sin que pulses nada. Si la web se abre, su propio
+// getUpdates corta este y GitHub se retira.
+const ESCUCHA_MS = 10_000;
+const ESCUCHA_MAX_MS = 4 * 60_000; // para que las páginas se sigan revisando
+async function escucharBot(estado) {
+  const inicio = Date.now();
+  let ultima = Date.now(), n = 0;
+  while (Date.now() - ultima < ESCUCHA_MS && Date.now() - inicio < ESCUCHA_MAX_MS) {
+    const quedan = Math.max(1, Math.ceil((ESCUCHA_MS - (Date.now() - ultima)) / 1000));
+    const r = await atenderTelegram(estado, { espera: quedan, inmediato: true });
+    if (r.conflicto) return `escucha cortada: la web se ha abierto (${n} más atendidos)`;
+    if (r.hechos.length) { n += r.hechos.length; ultima = Date.now(); }
+    else if (r.nadaNuevo) await espera(1000);
+  }
+  return `escucha terminada tras ${Math.round((Date.now() - inicio) / 1000)} s (${n} más atendidos)`;
 }
 
 /* ---------------------------------------------------------------- VIGIA_CONFIG */
@@ -529,7 +554,8 @@ async function guardarConfig() {
   const valor = JSON.stringify(final);
   if (valor.length > 47000) { anotar("La lista no cabe en VIGIA_CONFIG (48 KB): no se guardaron los cambios hechos desde el bot. Acorta filtros o quita páginas."); return; }
   const r = await fetch(API_VAR, { method: "PATCH", headers: cabecerasGh(), body: JSON.stringify({ name: "VIGIA_CONFIG", value: valor }), signal: AbortSignal.timeout(15_000) });
-  if (!r.ok) anotar(`No se pudieron guardar los cambios del bot en VIGIA_CONFIG (HTTP ${r.status}). Revisa que \`VIGIA_GH_TOKEN\` tenga «Variables: Read and write».`);
+  if (r.ok) cfgCambiada = false;
+  else anotar(`No se pudieron guardar los cambios del bot en VIGIA_CONFIG (HTTP ${r.status}). Revisa que \`VIGIA_GH_TOKEN\` tenga «Variables: Read and write».`);
 }
 
 /* ---------------------------------------------------------------- principal */
@@ -590,7 +616,13 @@ if (puedeGuardar) {
 }
 
 const resumen = [];
-if (!sinLista) for (const r of await atenderTelegram(estado)) resumen.push(["Telegram", r]);
+if (!sinLista) {
+  const t = await atenderTelegram(estado);
+  t.hechos.forEach(h => resumen.push(["Telegram", h]));
+  // Has usado el bot y no ha contestado la web: quedarse escuchando un rato.
+  if (t.hechos.length) resumen.push(["Telegram", await escucharBot(estado)]);
+  (estado[BOT] ||= {}).ultimaEjecucion = Date.now();
+}
 const monitors = cfg.monitors;
 for (const [idx, m] of monitors.entries()) {
   const st = (estado[m.id] ||= {});

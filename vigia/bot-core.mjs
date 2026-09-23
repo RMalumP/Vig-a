@@ -11,7 +11,7 @@
 // si por casualidad lo atienden los dos, el resultado sea el mismo.
 
 export const PREFIJO = "m"; // callback_data de los menús: «m:acción:…»
-export const ESPERA_ACTIONS = 30; // s que GitHub Actions deja a la página para responder (la página contesta en un segundo)
+export const ESPERA_ACTIONS = 10; // s que GitHub Actions deja a la página para responder (la página contesta en un segundo)
 const POR_PAGINA = 8;
 const FRECUENCIAS = [[60, "1 min"], [120, "2 min"], [300, "5 min"], [900, "15 min"], [1800, "30 min"], [3600, "1 h"], [10800, "3 h"], [21600, "6 h"], [86400, "24 h"]];
 const MODOS = { nuevo: "Información nueva", cambios: "Cualquier cambio", enlaces: "Enlaces nuevos", numero: "Un número" };
@@ -81,7 +81,9 @@ const filas = (...f) => f.filter(x => x && x.length);
 // lleva la cuenta de lo ya atendido. Lo que nadie recoge, Telegram lo borra a las 24 h.
 //
 // clasificar() → "mia" (la atiendo), "ajena" (la dejo) o "libre" (se puede tirar).
-export function clasificar(u, { origen, chat, ahora = Date.now() }) {
+// inmediato: GitHub Actions ya sabe que la web está cerrada (está en modo escucha)
+// y atiende menús y mensajes sin esperar a que la web conteste.
+export function clasificar(u, { origen, chat, ahora = Date.now(), inmediato = false }) {
   const q = u.callback_query;
   if (q) {
     const pref = String(q.data || "").split(":")[0];
@@ -90,7 +92,7 @@ export function clasificar(u, { origen, chat, ahora = Date.now() }) {
     if (aviso.includes(pref)) return "mia";
     if (otro.includes(pref)) return "ajena";
     if (pref !== PREFIJO) return "libre";
-    if (origen === "web") return "mia";
+    if (origen === "web" || inmediato) return "mia";
     // GitHub Actions solo atiende menús que la página no ha atendido a tiempo.
     const visto = q.message ? (q.message.edit_date || q.message.date) : 0;
     return ahora / 1000 - visto >= ESPERA_ACTIONS ? "mia" : "ajena";
@@ -98,7 +100,7 @@ export function clasificar(u, { origen, chat, ahora = Date.now() }) {
   const msg = u.message;
   const edad = ahora / 1000 - ((msg || u.edited_message || u.channel_post || u.my_chat_member)?.date ?? 0);
   if (msg && typeof msg.text === "string" && mismoChat(msg.chat, chat)) {
-    if (origen === "web") return "mia";
+    if (origen === "web" || inmediato) return "mia";
     return edad >= ESPERA_ACTIONS ? "mia" : "ajena";
   }
   // Mensajes recientes de otros chats: la página los usa para detectar el chat ID.

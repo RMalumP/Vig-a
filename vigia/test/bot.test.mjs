@@ -41,7 +41,7 @@ test("clasificar: la web atiende sus botones y los menús al momento", () => {
 
 test("clasificar: GitHub Actions deja los menús recientes a la web", () => {
   const o = { origen: "actions", chat: "42", ahora: AHORA };
-  const reciente = AHORA / 1000 - 10, viejo = AHORA / 1000 - ESPERA_ACTIONS - 1;
+  const reciente = AHORA / 1000 - 5, viejo = AHORA / 1000 - ESPERA_ACTIONS - 1;
   assert.equal(clasificar({ message: { text: "/menu", date: reciente, chat: { id: 42 } } }, o), "ajena");
   assert.equal(clasificar({ message: { text: "/menu", date: viejo, chat: { id: 42 } } }, o), "mia");
   assert.equal(clasificar({ callback_query: { data: "m:h", message: { date: viejo - 999, edit_date: reciente } } }, o), "ajena");
@@ -303,4 +303,14 @@ test("frecuencia de GitHub separada de la de la web", async () => {
   assert.ok(datos(w.editar.teclado).includes("m:nb:b2:1"));
   await atenderBoton("m:nb:b2:1", ctx);
   assert.equal(ctx.paginas_[1].cloud, true);
+});
+
+test("modo escucha: GitHub Actions atiende al momento sin esperar a la web", () => {
+  const o = { origen: "actions", chat: "42", ahora: AHORA };
+  const recien = { message: { text: "/menu", date: AHORA / 1000 - 2, chat: { id: 42 } } };
+  const boton = { callback_query: { data: "m:l:0", message: { date: AHORA / 1000 - 2 } } };
+  assert.equal(clasificar(recien, o), "ajena");
+  assert.equal(clasificar(recien, { ...o, inmediato: true }), "mia");
+  assert.equal(clasificar(boton, { ...o, inmediato: true }), "mia");
+  assert.equal(clasificar({ callback_query: { data: "ws:1" } }, { ...o, inmediato: true }), "ajena"); // botones de la web: siguen siendo suyos
 });
