@@ -255,3 +255,12 @@ test("la lista muestra todas las entradas, también las repetidas", async () => 
   assert.ok(textos.some(t => /🖥 seg-social\.es\/x\?lang=es · Cualquier cambio · texto/.test(t)));
   assert.match(l.editar.texto, /Páginas<\/b> \(3\)/);
 });
+
+test("frecuencia: 1 y 2 minutos entre las opciones", async () => {
+  const ctx = crearCtx();
+  const f = await atenderBoton("m:f:a1", ctx);
+  const d = datos(f.editar.teclado);
+  assert.ok(d.includes("m:fs:a1:60") && d.includes("m:fs:a1:120"));
+  assert.match(f.editar.texto, /mínimo es 1 minuto/);
+  assert.ok(f.editar.teclado.every(fila => fila.length <= 3));
+});

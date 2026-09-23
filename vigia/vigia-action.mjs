@@ -19,7 +19,10 @@ const ESTADO = process.env.ESTADO || "vigia-estado.json";
 const FILTRADO = 2;
 const MAX_HIST = 10; // avisos recientes por página, para «Últimos avisos» del bot
 const BOT = "_telegram"; // clave del estado reservada para el bot, no es una página
-const TOLERANCIA_MS = 90_000; // el cron de GitHub no es exacto
+// El reloj que lanza el workflow no es exacto: si a una página le falta poco
+// para tocarle, se revisa ya en vez de esperar a la siguiente vuelta. El margen
+// es proporcional a su frecuencia (con 1 minuto, 90 s serían más que el propio intervalo).
+const margen = intervaloMs => Math.min(90_000, intervaloMs * 0.3);
 const MAX_BYTES = 8 * 1024 * 1024; // páginas enormes: mejor avisar que agotar la memoria
 
 const avisos = []; // problemas de configuración, para el resumen del job
@@ -415,9 +418,9 @@ function ctxBot(bot) {
       if (!m) return;
       let nota = "✅ Guardado. La web lo recibirá al abrirse.";
       if (c.interval != null) {
-        const pedido = Number(c.interval) || 300, minimo = m.cloud === false ? 10 : 300;
+        const pedido = Number(c.interval) || 300, minimo = m.cloud === false ? 10 : 60;
         m.interval = Math.max(minimo, pedido);
-        if (pedido < minimo) nota = "✅ Guardado cada 5 min: GitHub Actions no baja de ahí.";
+        if (pedido < minimo) nota = "✅ Guardado cada minuto: GitHub Actions no baja de ahí.";
       }
       if (c.paused != null) { m.paused = !!c.paused; if (!m.paused && estado[id]) estado[id].last = 0; }
       if (c.ignore) m.ignore = c.ignore.join("\n");
@@ -580,7 +583,7 @@ for (const [idx, m] of monitors.entries()) {
   if (m.cloud === false) { resumen.push([`Página ${idx + 1}`, "solo en el navegador"]); continue; }
   if (m.paused) { resumen.push([`Página ${idx + 1}`, "en pausa"]); continue; }
   const intervalo = Math.max(60, Number(m.interval) || 300) * 1000;
-  if (st.last && Date.now() - st.last < intervalo - TOLERANCIA_MS) { resumen.push([`Página ${idx + 1}`, "aún no toca"]); continue; }
+  if (st.last && Date.now() - st.last < intervalo - margen(intervalo)) { resumen.push([`Página ${idx + 1}`, "aún no toca"]); continue; }
   if (!enHorario(m)) { resumen.push([`Página ${idx + 1}`, "fuera de horario"]); continue; }
   st.last = Date.now();
   try {

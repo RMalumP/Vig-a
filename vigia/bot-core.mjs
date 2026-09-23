@@ -13,7 +13,7 @@
 export const PREFIJO = "m"; // callback_data de los menús: «m:acción:…»
 export const ESPERA_ACTIONS = 90; // s que GitHub Actions deja a la página para responder
 const POR_PAGINA = 8;
-const FRECUENCIAS = [[300, "5 min"], [900, "15 min"], [1800, "30 min"], [3600, "1 h"], [10800, "3 h"], [21600, "6 h"], [86400, "24 h"]];
+const FRECUENCIAS = [[60, "1 min"], [120, "2 min"], [300, "5 min"], [900, "15 min"], [1800, "30 min"], [3600, "1 h"], [10800, "3 h"], [21600, "6 h"], [86400, "24 h"]];
 const MODOS = { nuevo: "Información nueva", cambios: "Cualquier cambio", enlaces: "Enlaces nuevos", numero: "Un número" };
 
 export const COMANDOS = [
@@ -201,10 +201,10 @@ function ficha(ctx, p) {
 function frecuencia(ctx, p) {
   const ops = FRECUENCIAS.map(([v, t]) => boton(`${Number(p.interval) === v ? "✅ " : ""}${t}`, `m:fs:${p.id}:${v}`));
   const propia = !FRECUENCIAS.some(([v]) => v === Number(p.interval));
-  const nota = p.cloud ? "\n\n<i>En GitHub Actions no baja de 5 minutos (y GitHub a veces tarda más).</i>"
+  const nota = p.cloud ? "\n\n<i>En GitHub Actions el mínimo es 1 minuto, y solo se cumple si el reloj externo (cron-job.org) lo despierta así de a menudo. Sin él, GitHub puede tardar horas.</i>"
     : "\n\n<i>Mínimo 10 segundos. Esta página la comprueba la web mientras está abierta.</i>";
   return { texto: `<b>⏱ Frecuencia</b>\n${esc(nombre(p, ctx.paginas()))}\n\nAhora: cada ${esc(cadaTxt(p.interval))}. ¿Cada cuánto la compruebo?${nota}`,
-    teclado: [ops.slice(0, 4), ops.slice(4), [boton(`${propia ? "✅ " : ""}✏️ Personalizada${propia ? ` (${cadaTxt(p.interval)})` : ""}`, `m:fp:${p.id}`)], [boton("⬅️ Volver", `m:p:${p.id}`)]] };
+    teclado: [ops.slice(0, 3), ops.slice(3, 6), ops.slice(6), [boton(`${propia ? "✅ " : ""}✏️ Personalizada${propia ? ` (${cadaTxt(p.interval)})` : ""}`, `m:fp:${p.id}`)], [boton("⬅️ Volver", `m:p:${p.id}`)]] };
 }
 
 function filtros(ctx, p) {

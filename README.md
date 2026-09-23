@@ -80,6 +80,30 @@ cuando pulsas **«Enviar lista a GitHub»**.
 Marca las páginas que quieras vigilar desde GitHub, pulsa «Enviar lista a
 GitHub» y listo. En «Últimas ejecuciones» puedes ver si funciona.
 
+### 5. Que se ejecute a tiempo (recomendado)
+
+GitHub no respeta el «cada 5 minutos» del workflow: con frecuencia pasan horas
+entre ejecuciones. Un reloj externo gratuito, [cron-job.org](https://cron-job.org),
+lo despierta puntualmente. En cada despertar, Vigía solo revisa las páginas a
+las que les toca según su frecuencia (que se cambia desde la web o el bot), así
+que el reloj marca el mínimo posible: con el reloj cada minuto, las páginas de
+GitHub pueden revisarse cada minuto.
+
+1. Crea un token *fine-grained* de este repositorio con **solo** «Actions:
+   Read and write» (así el reloj solo puede lanzar el workflow).
+2. En cron-job.org, crea una tarea:
+   - URL: `https://api.github.com/repos/TU-USUARIO/TU-REPO/actions/workflows/vigia.yml/dispatches`
+   - Frecuencia: cada minuto (o cada 5).
+   - En *Advanced*: método `POST`; cabeceras `Authorization: Bearer TU-TOKEN`,
+     `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28` y
+     `Content-Type: application/json`; cuerpo `{"ref":"main"}`.
+3. «Test run» debe devolver **204**.
+
+Con un minuto son unas 1440 ejecuciones al día. Es gratis en repositorios
+públicos, pero GitHub pide usar Actions para tareas del proyecto y podría
+considerar abusivo un uso tan intenso, y algunas webs bloquean a quien las
+consulta tan a menudo. Usa 1 minuto solo para las páginas que lo necesiten.
+
 #### Por qué conviene `VIGIA_CLAVE`
 
 Para saber si una página ha cambiado, Vigía guarda su contenido entre

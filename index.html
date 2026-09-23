@@ -2226,7 +2226,7 @@ ol.steps li{margin:6px 0}
         save(); renderList();
         programarEnvioGh();
         const r = { nota: nota(m) };
-        if (c.interval != null && m.cloud && m.interval < 300) r.nota += ". En GitHub, como mucho cada 5 min";
+        if (c.interval != null && m.cloud && m.interval < 60) r.nota += ". En GitHub, como mucho cada minuto";
         return r;
       },
       async cambiarGlobal(c) {
