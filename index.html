@@ -1519,17 +1519,23 @@ ol.steps li{margin:6px 0}
         ? core.repartir(updates, { origen: "web", chat: tg.chat })
         : { mias: updates.filter(u => /^w[sdt]:/.test(u.callback_query?.data || "")), offset: null };
       const atendidos = new Set(bot.atendidos || []);
+      let nuevas = 0;
       for (const u of mias) {
         const clave = u.callback_query ? u.callback_query.id : "u" + u.update_id;
         if (atendidos.has(clave)) continue;
         atendidos.add(clave);
+        nuevas++;
         if (/^w[sdt]:/.test(u.callback_query?.data || "")) await atenderBotonTg(u.callback_query).catch(() => {});
         else if (core) await core.responder(u, ctxBotWeb(), (m, b) => llamarTelegram(m, b)).catch(() => {});
       }
       bot.atendidos = [...atendidos].slice(-300);
       if (offset != null) bot.offset = offset;
       if (mias.length || offset != null) save();
-      return "ok";
+      // Si queda algo en la cola que no se puede confirmar (un botón de un aviso de
+      // GitHub Actions, un mensaje de otro chat), Telegram devolvería lo mismo al
+      // instante una y otra vez: sin nada nuevo, hay que esperar un poco.
+      const quedan = updates.some(u => u.update_id >= (bot.offset || 0));
+      return quedan && !nuevas ? "bloqueado" : "ok";
     } catch (err) {
       if (err.status === 409 && /webhook/i.test(err.message)) {
         if (!avisadoWebhook) {
@@ -1552,6 +1558,7 @@ ol.steps li{margin:6px 0}
       if (!tg.on || !tg.token || !tg.chat) { await dormir(3000); continue; }
       const r = await atenderTelegramWeb({ espera: 25 });
       if (r === "ok") pausa = 0;
+      else if (r === "bloqueado") await dormir(2000);
       else if (r === "conflicto") await dormir(800 + Math.random() * 1500); // GitHub Actions leyó a la vez: reintentar ya
       else { pausa = Math.min(60000, (pausa || 2500) * 2); await dormir(pausa); }
     }
@@ -2353,7 +2360,7 @@ ol.steps li{margin:6px 0}
     let n = 0;
     const borradosLocal = new Map((state.borradosGh || []).map(b => [b.id, b.t]));
     for (const c of cfg.monitors || []) {
-      if (!c || !c.id || !c.url) continue;
+      if (!c || !idSeguro(c.id) || !c.url) continue;
       const m = state.monitors.find(x => x.id === c.id);
       if (!m) {
         if (borradosLocal.has(c.id) && borradosLocal.get(c.id) >= (c.editado || 0)) continue;
@@ -2707,6 +2714,8 @@ ol.steps li{margin:6px 0}
      ===================================================================== */
   const CAMPOS_CONFIG = ["id", "url", "interval", "watch", "mode", "selector", "proxy", "ignore", "keywords", "random",
     "numCond", "numValor", "hDesde", "hHasta", "laborables", "movil", "cloud", "paused", "normas", "orden", "intervalGh"];
+  // Los id llegan también de fuera (archivo importado, VIGIA_CONFIG) y se escriben en el HTML.
+  const idSeguro = id => typeof id === "string" && /^[\w-]{1,40}$/.test(id);
   const pick = (o, campos) => Object.fromEntries(campos.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 
   $("#btnExport").onclick = () => {
@@ -2736,7 +2745,7 @@ ol.steps li{margin:6px 0}
         existentes.add(clave);
         const m = Object.assign({ interval: 300, watch: "nuevo", mode: "text", proxy: "auto", random: true, movil: true },
           pick(src, CAMPOS_CONFIG));
-        m.id = state.monitors.some(x => x.id === m.id) || !m.id ? uid() : m.id;
+        m.id = !idSeguro(m.id) || state.monitors.some(x => x.id === m.id) ? uid() : m.id;
         m.interval = Math.max(10, Number(m.interval) || 300);
         Object.assign(m, { status: "idle", message: "", changes: 0, normVersion: NORM_VERSION, nextAt: Date.now() + nuevas * 1500, createdAt: Date.now() });
         state.monitors.push(m);
