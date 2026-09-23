@@ -147,6 +147,25 @@ export function sugerirFiltro({ added = [], removed = [], base = [], normas = []
   return lineas.length ? { normas: [], ignore: lineas } : null;
 }
 
+// Para avisos de novedades (líneas, enlaces o entradas nuevas) no hay pareja
+// «antes/después»: el ruido típico es una línea con una parte que varía
+// («Actualizado a las 10:32»). Se propone ignorar el texto hasta la primera
+// cifra, solo si es la mayor parte del elemento (para no tapar noticias que
+// empiecen igual) y no se traga más del 30 % de lo que hay en la página.
+export function sugerirNovedades({ nuevos = [], todos = [], ignore = [] }) {
+  const textos = todos.map(i => i.text || "");
+  const reglas = [];
+  for (const i of nuevos.slice(0, 8)) {
+    const t = String(i.text || "").replace(/\s+/g, " ").trim();
+    const r = t.split(/\d/)[0].replace(/[\s:;,.·|(\[–-]+$/, "").trim();
+    if (r.length < 10 || r.length < t.length * 0.5) continue;
+    if (ignore.includes(r) || reglas.includes(r)) continue;
+    if (textos.filter(x => x.includes(r)).length > Math.max(1, textos.length * 0.3)) continue;
+    reglas.push(r);
+  }
+  return reglas.length ? { normas: [], ignore: reglas } : null;
+}
+
 // Telegram guarda una sola cola de novedades por bot, y la leen dos: la página
 // abierta (botones «w…») y GitHub Actions (botones «s»/«d»). Confirmar la cola
 // hasta un punto la borra para los dos, así que cada uno solo confirma hasta la

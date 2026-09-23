@@ -4,7 +4,7 @@ import {
   hash, host, recorta, normTxt, lineasDe, toMin, enHorario,
   extraer, limpiarAleatorio, filtrar, palabras, coincide,
   partirEtiquetas, aplicarNormas, deducirNorma, normaValida,
-  prefijoComun, sugerirFiltro, describeNorma, repartirUpdates,
+  prefijoComun, sugerirFiltro, sugerirNovedades, describeNorma, repartirUpdates,
   esFeed, leerFeed, leerEnlaces, leerNumero, escTg,
   derivarClave, cifrar, descifrar
 } from "../lib.mjs";
@@ -352,4 +352,27 @@ test("repartirUpdates deja los mensajes recientes para detectar el chat", () => 
   assert.equal(repartirUpdates([msg(1, 7200), boton(2, "s:a")], deActions, ahora).offset, 3);
   assert.equal(repartirUpdates([msg(1, 60), boton(2, "s:a")], deActions, ahora).offset, null);
   assert.deepEqual(repartirUpdates([], deActions, ahora), { mias: [], offset: null });
+});
+
+/* ------------------------------------ «No avisar de novedades como esta» */
+const items = (...t) => t.map(text => ({ text }));
+
+test("sugerirNovedades ignora la parte fija de una línea que cambia", () => {
+  const todos = items("Noticia uno", "Noticia dos", "Otra cosa", "Actualizado a las 10:32");
+  assert.deepEqual(sugerirNovedades({ nuevos: items("Actualizado a las 10:32"), todos }), { normas: [], ignore: ["Actualizado a las"] });
+  assert.deepEqual(sugerirNovedades({ nuevos: items("Visitas hoy: 12345"), todos }), { normas: [], ignore: ["Visitas hoy"] });
+});
+
+test("sugerirNovedades no propone reglas que taparían noticias que empiecen igual", () => {
+  const todos = items("a", "b", "c", "d");
+  assert.equal(sugerirNovedades({ nuevos: items("Convocatoria 2026 de ayudas para jóvenes"), todos }), null); // poco texto fijo
+  assert.equal(sugerirNovedades({ nuevos: items("12:30 Hora"), todos }), null); // empieza por cifra
+});
+
+test("sugerirNovedades usa el texto entero si no hay cifras y respeta el 30 %", () => {
+  assert.deepEqual(sugerirNovedades({ nuevos: items("Banner de cookies"), todos: items("Banner de cookies", "x", "y", "z") }),
+    { normas: [], ignore: ["Banner de cookies"] });
+  const todos = items("Precio del día 1", "Precio del día 2", "Precio del día 3", "otra");
+  assert.equal(sugerirNovedades({ nuevos: items("Precio del día 3"), todos }), null);
+  assert.equal(sugerirNovedades({ nuevos: items("Actualizado a las 10:32"), todos: items("Actualizado a las 10:32", "x", "y"), ignore: ["Actualizado a las"] }), null);
 });

@@ -133,6 +133,12 @@ Los avisos que llegan por Telegram llevan el mismo botón,
 el navegador como GitHub Actions. Al pulsarlo, el botón desaparece y el bot
 responde con lo que ha aprendido y un botón **«↩️ Deshacer»**.
 
+En los avisos de novedades («Haya información nueva», enlaces nuevos y feeds) el
+botón es **«🔕 No avisar de novedades como esta»**: ignora la parte fija del
+texto, hasta la primera cifra (de «Actualizado a las 10:32» aprende a ignorar
+«Actualizado a las»). Solo aparece cuando esa parte fija es la mayor parte del
+texto, para no tapar noticias de verdad que empiecen igual.
+
 - **Avisos de la página del navegador**: la página pregunta a Telegram cada 20
   segundos si has pulsado algo. Si estaba cerrada, lo atiende al volver a
   abrirla (Telegram guarda las pulsaciones 24 horas). El filtro queda en los

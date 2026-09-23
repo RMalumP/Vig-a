@@ -8,7 +8,7 @@ import {
   MAX_SEEN, hash, host, recorta, fmtNum, lineasDe, enHorario,
   raices, extraer, filtrar, palabras, coincide,
   esFeed, leerFeed, leerEnlaces, leerNumero, escTg,
-  sugerirFiltro, describeNorma, mismaNorma, normaValida, repartirUpdates,
+  sugerirFiltro, sugerirNovedades, describeNorma, mismaNorma, normaValida, repartirUpdates,
   derivarClave, cifrar, descifrar
 } from "./lib.mjs";
 
@@ -222,7 +222,9 @@ async function revisar(m, st) {
     st.seen = [...new Set([...claves, ...st.seen])].slice(0, MAX_SEEN);
     if (relevantes.length) {
       const titulo = relevantes.length === 1 ? `Novedad en ${host(m.url)}` : `${relevantes.length} novedades en ${host(m.url)}`;
-      await avisar({ titulo, lineas: relevantes, url: relevantes.length === 1 && relevantes[0].href ? relevantes[0].href : m.url });
+      const f = sugerirNovedades({ nuevos: relevantes, todos: items, ignore: lineasDe(m.ignore) });
+      await avisar({ titulo, lineas: relevantes, url: relevantes.length === 1 && relevantes[0].href ? relevantes[0].href : m.url,
+        botones: botonSilenciar(m, st, f, "🔕 No avisar de novedades como esta") });
       return `${relevantes.length} novedades (avisado)`;
     }
     return nuevos.length ? `${nuevos.length} novedades sin palabras clave` : "nada nuevo";
@@ -248,7 +250,7 @@ async function revisar(m, st) {
   const lineas = antesLineas
     ? [...added.slice(0, 8).map(t => ({ text: "+ " + t })), ...removed.slice(0, 3).map(t => ({ text: "− " + t }))]
     : [{ text: "La página ha cambiado." }];
-  await avisar({ titulo: `Cambio en ${host(m.url)}`, lineas, url: m.url, botones: botonSilenciar(m, st, { added, removed, base: lines }) });
+  await avisar({ titulo: `Cambio en ${host(m.url)}`, lineas, url: m.url, botones: botonSilenciar(m, st, sugerirFiltro({ added, removed, base: lines, normas: (m.normas || []).filter(normaValida), ignore: lineasDe(m.ignore) })) });
   return `cambio +${added.length}/−${removed.length} (avisado)`;
 }
 
@@ -257,18 +259,16 @@ const MAX_SUGERENCIAS = 10;
 
 // Guarda en el estado el filtro que se aplicaría y devuelve el botón que lo pide.
 // callback_data solo admite 64 bytes: viaja un identificador, no el filtro.
-function botonSilenciar(m, st, cambio) {
-  if (!process.env.TELEGRAM_TOKEN || !process.env.TELEGRAM_CHAT_ID) return;
-  const f = sugerirFiltro({ ...cambio, normas: (m.normas || []).filter(normaValida), ignore: lineasDe(m.ignore) });
-  if (!f) return;
+function botonSilenciar(m, st, f, texto = "🔕 No avisar de cambios como este") {
+  if (!f || !process.env.TELEGRAM_TOKEN || !process.env.TELEGRAM_CHAT_ID) return;
   const id = hash(`${m.id}|${JSON.stringify(f)}|${Date.now()}|${Math.random()}`).slice(0, 12);
   st.sugerencias = [{ id, ...f }, ...(st.sugerencias || [])].slice(0, MAX_SUGERENCIAS);
-  return [{ text: "🔕 No avisar de cambios como este", callback_data: `s:${id}` }];
+  return [{ text: texto, callback_data: `s:${id}` }];
 }
 
 const describeFiltro = f => f.normas.length
   ? `Ya no se mirará ${f.normas.map(describeNorma).join(" y ")}. Cualquier otro cambio en esas etiquetas te seguirá avisando.`
-  : `Se ignorarán las líneas que contengan ${f.ignore.map(p => `«${recorta(p, 60)}»`).join(", ")}.`;
+  : `Se ignorará todo lo que contenga ${f.ignore.map(p => `«${recorta(p, 60)}»`).join(", ")}.`;
 
 function aplicarFiltro(st, f) {
   const normas = st.normasBot || [], ignorar = st.ignorarBot || [];
@@ -303,7 +303,7 @@ async function atenderBoton(q, monitors, estado) {
   } else if (accion === "d") {
     if (sug.aplicada) { quitarFiltro(st, sug); sug.aplicada = false; nuevaReferencia(st); }
     texto = `↩️ Filtro retirado en ${host(m.url)}: vuelves a recibir avisos de esos cambios.`;
-    botones = [{ text: "🔕 No avisar de cambios como este", callback_data: `s:${id}` }];
+    botones = [{ text: "🔕 Volver a silenciarlo", callback_data: `s:${id}` }];
   } else { await responder("Botón desconocido."); return; }
 
   await responder(texto.slice(0, 190));

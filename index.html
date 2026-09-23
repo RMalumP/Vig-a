@@ -965,7 +965,7 @@ ol.steps li{margin:6px 0}
         m.lastChange = Date.now();
         m.status = "changed";
         m.message = `${relevantes.length} ${etiqueta(kind, relevantes.length)}: ${recorta(relevantes[0].text, 80)}`;
-        notifyNuevos(m, relevantes, kind);
+        notifyNuevos(m, relevantes, kind, items);
       } else {
         m.status = m.status === "changed" && m.unseen ? "changed" : "ok";
         m.message = nuevos.length
@@ -1133,7 +1133,7 @@ ol.steps li{margin:6px 0}
     if (sug.normas.length) {
       cuerpo = `Se dejará de mirar ${sug.normas.map(describeNorma).join(" y ")}. Cualquier otro cambio en esas etiquetas te seguirá avisando.`;
     } else {
-      cuerpo = `Se ignorarán las líneas que contengan ${sug.ignore.map(p => `«${recorta(p, 60)}»`).join(", ")}. Puedes revisarlo en Ajustes.`;
+      cuerpo = `Se ignorará todo lo que contenga ${sug.ignore.map(p => `«${recorta(p, 60)}»`).join(", ")}. Puedes revisarlo en Ajustes.`;
     }
     if (sug.aplicada) return cuerpo;
     const normas = m.normas || [], actuales = reglasIgnorar(m);
@@ -1162,21 +1162,44 @@ ol.steps li{margin:6px 0}
     if (editando === m) { $("#e-ignore").value = m.ignore || ""; pintarNormas(m); }
   }
 
-  function notifyNuevos(m, items, kind) {
+  // Copia de sugerirNovedades (vigia/lib.mjs).
+  function sugerirNovedades({ nuevos = [], todos = [], ignore = [] }) {
+    const textos = todos.map(i => i.text || "");
+    const reglas = [];
+    for (const i of nuevos.slice(0, 8)) {
+      const t = String(i.text || "").replace(/\s+/g, " ").trim();
+      const r = t.split(/\d/)[0].replace(/[\s:;,.·|(\[–-]+$/, "").trim();
+      if (r.length < 10 || r.length < t.length * 0.5) continue;
+      if (ignore.includes(r) || reglas.includes(r)) continue;
+      if (textos.filter(x => x.includes(r)).length > Math.max(1, textos.length * 0.3)) continue;
+      reglas.push(r);
+    }
+    return reglas.length ? { normas: [], ignore: reglas } : null;
+  }
+
+  function notifyNuevos(m, items, kind, todos = items) {
     m.unseen = true;
     const lista = items.slice(0, 6).map(i => i.href
       ? `<li><a href="${esc(i.href)}" target="_blank" rel="noopener">${esc(recorta(i.text))}</a></li>`
       : `<li>${esc(recorta(i.text))}</li>`).join("")
       + (items.length > 6 ? `<li class="mas">y ${items.length - 6} más</li>` : "");
     const titulo = items.length === 1 ? `Novedad en ${host(m.url)}` : `${items.length} novedades en ${host(m.url)}`;
+    const f = sugerirNovedades({ nuevos: items, todos, ignore: reglasIgnorar(m) });
+    const sug = f ? nuevaSugerencia(m, f) : null;
     toast({
       kind: "changed", sticky: true, title: titulo, url: m.url,
       summary: `${items.length} ${etiqueta(kind, items.length)}, ${hms(Date.now())}`,
-      listHtml: lista, onOpen: () => markSeen(m)
+      listHtml: lista, onOpen: () => markSeen(m),
+      ignoreLabel: sug ? "No avisar de novedades como esta" : null,
+      onIgnore: () => {
+        const ya = sug.aplicada;
+        toast({ title: ya ? "Ese filtro ya estaba puesto" : "Filtro añadido", url: m.url, body: aprenderFiltro(m, sug) });
+      }
     });
     registrar(m, titulo, items);
     addLog(m, "changed", `${titulo}: ${items.slice(0, 2).map(i => recorta(i.text, 60)).join(" | ")}`);
-    avisarFuera(m, titulo, items, items.length === 1 && items[0].href ? items[0].href : m.url);
+    avisarFuera(m, titulo, items, items.length === 1 && items[0].href ? items[0].href : m.url,
+      sug ? [{ text: "🔕 No avisar de novedades como esta", callback_data: `ws:${sug.id}` }] : null);
   }
 
   function notifyNumero(m, prev, v, pct) {
@@ -1289,7 +1312,7 @@ ol.steps li{margin:6px 0}
     } else {
       olvidarFiltro(m, sug);
       texto = `↩️ Filtro retirado en ${host(m.url)}: vuelves a recibir avisos de esos cambios.`;
-      botones = [{ text: "🔕 No avisar de cambios como este", callback_data: `ws:${id}` }];
+      botones = [{ text: "🔕 Volver a silenciarlo", callback_data: `ws:${id}` }];
       addLog(m, "info", "Filtro retirado desde Telegram");
       toast({ title: "Filtro retirado desde Telegram", url: m.url, body: texto.replace(/^↩️ /, "") });
     }
