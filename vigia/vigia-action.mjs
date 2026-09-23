@@ -218,7 +218,8 @@ async function revisar(m, st) {
     const el = raices($, m).first();
     const txt = (el.attr("content") || el.attr("value") || el.text() || "").replace(/\s+/g, " ").trim();
     const v = leerNumero(txt);
-    if (v == null || isNaN(v)) throw new Error(`No hay ningún número en «${recorta(txt, 60)}».`);
+    // Sin copiar el texto de la página: este mensaje acaba en el registro, que puede ser público.
+    if (v == null || isNaN(v)) throw new Error(`No hay ningún número en la zona «${m.selector}».`);
     const prev = st.numero;
     st.numero = v;
     if (prev == null || rebase) return `referencia: ${fmtNum(v)}`;
@@ -549,8 +550,9 @@ catch { console.error("VIGIA_CONFIG no es un JSON válido. Vuelve a pulsar «Env
 // Guardar cambios hechos desde el bot exige un token con permiso sobre las variables.
 let puedeGuardar = false, cfgCambiada = false;
 let motivoSoloLectura = "para cambiar ajustes con la web cerrada, crea el secreto VIGIA_GH_TOKEN (ver README).";
+let sinLista = false; // no se pudo leer la lista: esta vez no se toca nada
 if (process.env.VIGIA_GH_TOKEN && API_VAR) {
-  try { cfg = fusionarConfigs(cfg, await leerConfigGh()); puedeGuardar = true; }
+  try { cfg = fusionarConfigs(cfg, await leerConfigGh().catch(async () => { await espera(3000); return leerConfigGh(); })); puedeGuardar = true; }
   catch (e) {
     motivoSoloLectura = e.status === 401 || e.status === 403
       ? "VIGIA_GH_TOKEN no tiene permiso «Variables: Read and write» sobre este repositorio."
@@ -562,7 +564,10 @@ if (!process.env.VIGIA_GH_TOKEN && cfg.monitors?.length) {
   anotar("Tu lista de páginas aparece en el registro de cada ejecución (GitHub muestra las variables de entorno, y en un repositorio público el registro lo ve cualquiera). Crea el secreto `VIGIA_GH_TOKEN` (ver README): con él la lista se lee por la API y deja de aparecer.");
 }
 if (process.env.VIGIA_GH_TOKEN && !puedeGuardar && !cfg.monitors?.length) {
-  anotar("Sin lista de páginas: con `VIGIA_GH_TOKEN` la lista se lee por la API, y el token no funciona. Revisa sus permisos.");
+  // Sin lista no se sabe qué páginas hay: tratarlo como «no hay ninguna» borraría
+  // la memoria de todas por un fallo pasajero de GitHub.
+  sinLista = true;
+  anotar("No se pudo leer la lista de páginas, así que esta ejecución no ha revisado nada ni ha tocado el estado. Si se repite, revisa los permisos de `VIGIA_GH_TOKEN`.");
 }
 cfg.monitors = Array.isArray(cfg.monitors) ? cfg.monitors : [];
 cfg.global = { ignore: "", normas: [], orden: false, ...(cfg.global || {}) };
@@ -572,7 +577,7 @@ try { estado = descifrar(await readFile(ESTADO, "utf8"), clave) || {}; }
 catch { console.log("Sin estado previo válido: se tomarán referencias nuevas."); }
 
 // Olvidar páginas que ya no están en la lista
-for (const id of Object.keys(estado)) if (id !== BOT && !cfg.monitors.some(m => m.id === id)) delete estado[id];
+if (!sinLista) for (const id of Object.keys(estado)) if (id !== BOT && !cfg.monitors.some(m => m.id === id)) delete estado[id];
 
 // Con token, lo aprendido antes solo en el estado pasa a la lista compartida.
 if (puedeGuardar) {
@@ -585,7 +590,7 @@ if (puedeGuardar) {
 }
 
 const resumen = [];
-for (const r of await atenderTelegram(estado)) resumen.push(["Telegram", r]);
+if (!sinLista) for (const r of await atenderTelegram(estado)) resumen.push(["Telegram", r]);
 const monitors = cfg.monitors;
 for (const [idx, m] of monitors.entries()) {
   const st = (estado[m.id] ||= {});
