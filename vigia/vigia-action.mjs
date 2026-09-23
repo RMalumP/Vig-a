@@ -275,8 +275,10 @@ function botonSilenciar(m, st, f, texto = "🔕 No avisar de cambios como este")
   return [{ text: texto, callback_data: `s:${id}` }];
 }
 
-const describeFiltro = f => f.orden
+const describeFiltro = f => f.orden && !f.ignore.length
   ? "Ya no avisará si solo cambia el orden de las líneas o cuántas veces se repite alguna."
+  : f.orden
+  ? `Se ignorará todo lo que contenga ${f.ignore.map(p => `«${recorta(p, 60)}»`).join(", ")}, y no avisará si solo cambia el orden de las líneas o cuántas veces se repite alguna.`
   : f.normas.length
   ? `Ya no se mirará ${f.normas.map(describeNorma).join(" y ")}. Cualquier otro cambio en esas etiquetas te seguirá avisando.`
   : `Se ignorará todo lo que contenga ${f.ignore.map(p => `«${recorta(p, 60)}»`).join(", ")}.`;

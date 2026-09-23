@@ -1111,7 +1111,10 @@ ol.steps li{margin:6px 0}
       const cambian = sugerirNovedades({ nuevos: [...d.added.slice(0, pares), ...d.removed.slice(0, pares)].map(txt), todos, ignore: reglasIgnorar(m), exacta: false });
       const sueltas = sugerirNovedades({ nuevos: [...d.added.slice(pares), ...d.removed.slice(pares)].map(txt), todos, ignore: reglasIgnorar(m) });
       const todas = [...new Set([...(cambian ? cambian.ignore : []), ...(sueltas ? sueltas.ignore : [])])];
-      if (todas.length) suelta = { normas: [], ignore: todas };
+      // Quitar una línea que va y viene deja desparejadas otras repetidas (su
+      // «</ul>», por ejemplo) y el siguiente aviso sería +0/−0: se aprende a la
+      // vez a no avisar si solo cambian el orden o las repeticiones.
+      if (todas.length) suelta = sueltas ? { normas: [], ignore: todas, orden: true } : { normas: [], ignore: todas };
     }
 
     // La misma propuesta sirve para el botón de aquí y para el de Telegram:
@@ -1126,7 +1129,7 @@ ol.steps li{margin:6px 0}
       kind: "changed", sticky: true, title: titulo, url: m.url, htmlBody: preview,
       summary: d ? `+${d.added.length} / −${d.removed.length} líneas, ${hms(Date.now())}` : hms(Date.now()),
       onOpen: () => markSeen(m),
-      ignoreLabel: sug ? (sug.orden ? "No avisar si solo cambia el orden" : "No avisar de cambios como este") : null,
+      ignoreLabel: sug ? (sug.orden && !sug.ignore.length ? "No avisar si solo cambia el orden" : "No avisar de cambios como este") : null,
       onIgnore: () => {
         const ya = sug.aplicada;
         const cuerpo = aprenderFiltro(m, sug);
@@ -1141,7 +1144,7 @@ ol.steps li{margin:6px 0}
     if (!sug) addLog(m, "info", d
       ? "Sin botón para silenciar: no se encontró una regla segura para este cambio."
       : "Sin botón para silenciar: no había copia de la versión anterior (página muy grande o almacenamiento lleno).");
-    avisarFuera(m, titulo, lineas, m.url, sug ? [{ text: sug.orden ? "🔕 No avisar si solo cambia el orden" : "🔕 No avisar de cambios como este", callback_data: `ws:${sug.id}` }] : null);
+    avisarFuera(m, titulo, lineas, m.url, sug ? [{ text: sug.orden && !sug.ignore.length ? "🔕 No avisar si solo cambia el orden" : "🔕 No avisar de cambios como este", callback_data: `ws:${sug.id}` }] : null);
   }
 
   /* ---------- Filtros aprendidos («No avisar de cambios como este») ---------- */
@@ -1156,8 +1159,10 @@ ol.steps li{margin:6px 0}
   // que de verdad se añadió, para que «Deshacer» no quite filtros anteriores.
   function aprenderFiltro(m, sug) {
     let cuerpo;
-    if (sug.orden) {
+    if (sug.orden && !sug.ignore.length) {
       cuerpo = "Ya no avisará si solo cambia el orden de las líneas o cuántas veces se repite alguna. Puedes revisarlo en Ajustes.";
+    } else if (sug.orden) {
+      cuerpo = `Se ignorará todo lo que contenga ${sug.ignore.map(p => `«${recorta(p, 60)}»`).join(", ")}, y no avisará si solo cambia el orden de las líneas o cuántas veces se repite alguna. Puedes revisarlo en Ajustes.`;
     } else if (sug.normas.length) {
       cuerpo = `Se dejará de mirar ${sug.normas.map(describeNorma).join(" y ")}. Cualquier otro cambio en esas etiquetas te seguirá avisando.`;
     } else {

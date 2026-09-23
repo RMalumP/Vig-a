@@ -153,7 +153,11 @@ export function sugerirFiltro({ added = [], removed = [], base = [], normas = []
   const cambian = sugerirNovedades({ nuevos: [...added.slice(0, pares), ...removed.slice(0, pares)].map(txt), todos, ignore, exacta: false });
   const sueltas = sugerirNovedades({ nuevos: [...added.slice(pares), ...removed.slice(pares)].map(txt), todos, ignore });
   const todas = [...new Set([...(cambian?.ignore || []), ...(sueltas?.ignore || [])])];
-  return todas.length ? { normas: [], ignore: todas } : null;
+  if (!todas.length) return null;
+  // Quitar una línea que va y viene deja desparejadas otras repetidas (su
+  // «</ul>», por ejemplo) y el siguiente aviso sería +0/−0: se aprende a la vez
+  // a no avisar si solo cambian el orden o las repeticiones.
+  return sueltas ? { normas: [], ignore: todas, orden: true } : { normas: [], ignore: todas };
 }
 
 // Para avisos de novedades (líneas, enlaces o entradas nuevas) no hay pareja
