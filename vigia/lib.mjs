@@ -147,6 +147,26 @@ export function sugerirFiltro({ added = [], removed = [], base = [], normas = []
   return lineas.length ? { normas: [], ignore: lineas } : null;
 }
 
+// Telegram guarda una sola cola de novedades por bot, y la leen dos: la página
+// abierta (botones «w…») y GitHub Actions (botones «s»/«d»). Confirmar la cola
+// hasta un punto la borra para los dos, así que cada uno solo confirma hasta la
+// primera pulsación ajena (o mensaje reciente, que la página usa para detectar
+// el chat). Lo propio que quede detrás se vuelve a leer: hay que llevar la
+// cuenta de lo ya atendido. Lo que nadie recoge, Telegram lo borra a las 24 h.
+export function repartirUpdates(updates, esMia, ahora = Date.now()) {
+  const mias = [];
+  let offset = null, bloqueado = false;
+  for (const u of updates || []) {
+    const q = u.callback_query;
+    const mia = !!q && esMia(String(q.data || "").split(":")[0]);
+    if (mia) mias.push(q);
+    const fecha = (u.message || u.edited_message || u.channel_post || u.my_chat_member)?.date ?? 0;
+    if (q ? !mia : ahora / 1000 - fecha <= 3600) bloqueado = true;
+    if (!bloqueado) offset = u.update_id + 1;
+  }
+  return { mias, offset };
+}
+
 export function limpiarAleatorio(line) {
   return line
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "‹id›")

@@ -128,19 +128,23 @@ página, para no dejarte sin vigilancia sin avisar.
 
 #### Desde Telegram
 
-Los avisos que manda GitHub Actions por Telegram llevan el mismo botón,
-**«🔕 No avisar de cambios como este»**, y aprenden igual que en la página. Hay
-algunas diferencias:
+Los avisos que llegan por Telegram llevan el mismo botón,
+**«🔕 No avisar de cambios como este»**, tanto si los manda la página abierta en
+el navegador como GitHub Actions. Al pulsarlo, el botón desaparece y el bot
+responde con lo que ha aprendido y un botón **«↩️ Deshacer»**.
 
-- El workflow no está encendido todo el rato: la pulsación se lee al empezar la
-  siguiente ejecución (unos 5 minutos). Entonces el botón desaparece y el bot
-  responde con lo que ha aprendido y un botón **«↩️ Deshacer»**.
-- Estos filtros se guardan en el estado cifrado de Actions, no en la página, así
-  que no aparecen en Ajustes. Pulsar «Enviar lista a GitHub» no los borra. Se
-  borran con «Deshacer» o cuando quitas la página de la lista de GitHub.
-- Solo cuentan las pulsaciones que vienen del chat `TELEGRAM_CHAT_ID`.
-- Si tu bot tiene un *webhook* configurado, Telegram no deja leer los botones.
-  El resumen de la ejecución te avisará de ello.
+- **Avisos de la página del navegador**: la página pregunta a Telegram cada 20
+  segundos si has pulsado algo. Si estaba cerrada, lo atiende al volver a
+  abrirla (Telegram guarda las pulsaciones 24 horas). El filtro queda en los
+  Ajustes de esa página, igual que si lo hubieras pulsado en la web.
+- **Avisos de GitHub Actions**: la pulsación se lee al empezar la siguiente
+  ejecución (unos 5 minutos). Estos filtros se guardan en el estado cifrado de
+  Actions, no en la página, así que no aparecen en Ajustes. Pulsar «Enviar lista
+  a GitHub» no los borra. Se borran con «Deshacer» o cuando quitas la página de
+  la lista de GitHub.
+- Solo cuentan las pulsaciones que vienen de tu chat de avisos.
+- Si tu bot tiene un *webhook* configurado, Telegram no deja leer los botones, y
+  Vigía te avisará de ello.
 
 ## Proxy propio (opcional)
 

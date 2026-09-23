@@ -8,7 +8,7 @@ import {
   MAX_SEEN, hash, host, recorta, fmtNum, lineasDe, enHorario,
   raices, extraer, filtrar, palabras, coincide,
   esFeed, leerFeed, leerEnlaces, leerNumero, escTg,
-  sugerirFiltro, describeNorma, mismaNorma, normaValida,
+  sugerirFiltro, describeNorma, mismaNorma, normaValida, repartirUpdates,
   derivarClave, cifrar, descifrar
 } from "./lib.mjs";
 
@@ -268,7 +268,7 @@ function botonSilenciar(m, st, cambio) {
 
 const describeFiltro = f => f.normas.length
   ? `Ya no se mirará ${f.normas.map(describeNorma).join(" y ")}. Cualquier otro cambio en esas etiquetas te seguirá avisando.`
-  : `Se ignorarán las líneas que empiecen por ${f.ignore.map(p => `«${recorta(p, 60)}»`).join(", ")}.`;
+  : `Se ignorarán las líneas que contengan ${f.ignore.map(p => `«${recorta(p, 60)}»`).join(", ")}.`;
 
 function aplicarFiltro(st, f) {
   const normas = st.normasBot || [], ignorar = st.ignorarBot || [];
@@ -333,20 +333,17 @@ async function atenderTelegram(monitors, estado) {
       : `No se pudieron leer los botones de Telegram — ${e.message}`);
     return [];
   }
-  const hechos = [];
-  let confirmar = null;
-  for (const u of updates) {
-    if (u.callback_query) {
-      try { const r = await atenderBoton(u.callback_query, monitors, estado); if (r) hechos.push(r); }
-      catch (e) { anotar(`No se pudo atender un botón de Telegram — ${e.message}`); }
-      confirmar = u.update_id; // aunque fallara la respuesta: el filtro ya está hecho y no se repite
-    } else if (Date.now() / 1000 - (u.message?.date ?? 0) > 3600) {
-      // Los mensajes recientes se dejan sin confirmar: la página los usa para
-      // detectar el chat_id al configurar Telegram.
-      confirmar = u.update_id;
-    }
+  // «s»/«d» son de este workflow; los de la página («ws»/«wd») se dejan en la cola.
+  const { mias, offset } = repartirUpdates(updates, a => a === "s" || a === "d");
+  const atendidos = new Set(bot.atendidos || []), hechos = [];
+  for (const q of mias) {
+    if (atendidos.has(q.id)) continue;
+    atendidos.add(q.id); // aunque falle la respuesta: el filtro ya está hecho y no se repite
+    try { const r = await atenderBoton(q, monitors, estado); if (r) hechos.push(r); }
+    catch (e) { anotar(`No se pudo atender un botón de Telegram — ${e.message}`); }
   }
-  if (confirmar != null) bot.offset = confirmar + 1;
+  bot.atendidos = [...atendidos].slice(-200);
+  if (offset != null) bot.offset = offset;
   return hechos;
 }
 

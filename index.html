@@ -1096,33 +1096,70 @@ ol.steps li{margin:6px 0}
     const seguro = p => p.length >= 15 && (base.length < 4 || base.filter(l => l.includes(p)).length <= Math.max(1, base.length * 0.3));
     const unicos = normasNuevas.length ? [] : [...new Set(prefijos)].filter(seguro);
 
+    // La misma propuesta sirve para el botón de aquí y para el de Telegram:
+    // pulsar uno deja el otro sin efecto.
+    const sug = normasNuevas.length || unicos.length ? nuevaSugerencia(m, { normas: normasNuevas, ignore: normasNuevas.length ? [] : unicos }) : null;
+
     const titulo = `Cambio en ${host(m.url)}`;
     toast({
       kind: "changed", sticky: true, title: titulo, url: m.url, htmlBody: preview,
       summary: d ? `+${d.added.length} / −${d.removed.length} líneas, ${hms(Date.now())}` : hms(Date.now()),
       onOpen: () => markSeen(m),
-      ignoreLabel: normasNuevas.length || unicos.length ? "No avisar de cambios como este" : null,
+      ignoreLabel: sug ? "No avisar de cambios como este" : null,
       onIgnore: () => {
-        let cuerpo;
-        if (normasNuevas.length) {
-          m.normas = [...(m.normas || []), ...normasNuevas];
-          cuerpo = `Se dejará de mirar ${normasNuevas.map(describeNorma).join(" y ")}. Cualquier otro cambio en esas etiquetas te seguirá avisando.`;
-        } else {
-          const actuales = reglasIgnorar(m);
-          m.ignore = [...actuales, ...unicos.filter(p => !actuales.includes(p))].join("\n");
-          cuerpo = "Esas líneas se ignorarán a partir de ahora. Puedes revisarlo en Ajustes.";
-        }
-        m.rebase = true;
-        markSeen(m);
-        marcarGhPendiente(m);
-        save();
-        toast({ title: "Filtro añadido", url: m.url, body: cuerpo });
+        const ya = sug.aplicada;
+        const cuerpo = aprenderFiltro(m, sug);
+        toast({ title: ya ? "Ese filtro ya estaba puesto" : "Filtro añadido", url: m.url, body: cuerpo });
       }
     });
     const lineas = d ? [...d.added.slice(0, 8).map(t => ({ text: "+ " + t })), ...d.removed.slice(0, 3).map(t => ({ text: "− " + t }))] : [{ text: "La página ha cambiado." }];
     registrar(m, titulo, lineas);
     addLog(m, "changed", d ? `Cambio: +${d.added.length} / −${d.removed.length} líneas` : "Cambio detectado");
-    avisarFuera(m, titulo, lineas, m.url);
+    avisarFuera(m, titulo, lineas, m.url, sug ? [{ text: "🔕 No avisar de cambios como este", callback_data: `ws:${sug.id}` }] : null);
+  }
+
+  /* ---------- Filtros aprendidos («No avisar de cambios como este») ---------- */
+  const MAX_SUGERENCIAS = 10;
+  function nuevaSugerencia(m, f) {
+    const sug = { id: hash(`${m.id}|${JSON.stringify(f)}|${Date.now()}|${Math.random()}`).slice(0, 12), ...f };
+    m.sugTg = [sug, ...(m.sugTg || [])].slice(0, MAX_SUGERENCIAS);
+    return sug;
+  }
+
+  // Devuelve el texto que explica lo aprendido. Guarda en la sugerencia solo lo
+  // que de verdad se añadió, para que «Deshacer» no quite filtros anteriores.
+  function aprenderFiltro(m, sug) {
+    let cuerpo;
+    if (sug.normas.length) {
+      cuerpo = `Se dejará de mirar ${sug.normas.map(describeNorma).join(" y ")}. Cualquier otro cambio en esas etiquetas te seguirá avisando.`;
+    } else {
+      cuerpo = `Se ignorarán las líneas que contengan ${sug.ignore.map(p => `«${recorta(p, 60)}»`).join(", ")}. Puedes revisarlo en Ajustes.`;
+    }
+    if (sug.aplicada) return cuerpo;
+    const normas = m.normas || [], actuales = reglasIgnorar(m);
+    sug.puestas = { normas: sug.normas.filter(n => !normas.some(x => mismaNorma(x, n))), ignore: sug.ignore.filter(p => !actuales.includes(p)) };
+    m.normas = [...normas, ...sug.puestas.normas];
+    m.ignore = [...actuales, ...sug.puestas.ignore].join("\n");
+    sug.aplicada = true;
+    cambiarFiltros(m);
+    return cuerpo;
+  }
+
+  function olvidarFiltro(m, sug) {
+    if (!sug.aplicada) return;
+    const p = sug.puestas || sug;
+    m.normas = (m.normas || []).filter(n => !p.normas.some(x => mismaNorma(x, n)));
+    m.ignore = reglasIgnorar(m).filter(l => !p.ignore.includes(l)).join("\n");
+    sug.aplicada = false;
+    cambiarFiltros(m);
+  }
+
+  function cambiarFiltros(m) {
+    m.rebase = true;
+    markSeen(m);
+    marcarGhPendiente(m);
+    save();
+    if (editando === m) { $("#e-ignore").value = m.ignore || ""; pintarNormas(m); }
   }
 
   function notifyNuevos(m, items, kind) {
@@ -1158,7 +1195,7 @@ ol.steps li{margin:6px 0}
   }
 
   // Sonido, notificación del sistema, título, icono y móvil
-  function avisarFuera(m, titulo, lineas, abrir) {
+  function avisarFuera(m, titulo, lineas, abrir, botones) {
     const silencio = enSilencio();
     lastRepeat = Date.now();
     if (!silencio) {
@@ -1171,7 +1208,7 @@ ol.steps li{margin:6px 0}
       }
     }
     if (document.hidden) { unseenTitle++; document.title = `(${unseenTitle}) Novedades · Vigía`; }
-    if (m.movil !== false) enviarMovil({ titulo, lineas, url: abrir, silencioso: silencio });
+    if (m.movil !== false) enviarMovil({ titulo, lineas, url: abrir, silencioso: silencio, botones });
   }
 
   function markSeen(m) { m.unseen = false; if (m.status === "changed") m.status = "ok"; save(); renderList(); }
@@ -1184,7 +1221,20 @@ ol.steps li{margin:6px 0}
   const escTg = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
   let ultimoErrorMovil = { txt: "", t: 0 };
 
-  async function enviarTelegram(token, chat, { titulo, lineas = [], url, silencioso }) {
+  const tgUrl = (token, metodo) => `https://api.telegram.org/bot${encodeURIComponent(token).replace(/%3A/gi, ":")}/${metodo}`;
+  async function llamarTelegram(metodo, cuerpo, token = state.settings.tg.token) {
+    const res = await fetch(tgUrl(token, metodo), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cuerpo)
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!j.ok) throw Object.assign(new Error("Telegram: " + (j.description || `error ${res.status}`)), { status: res.status });
+    return j.result;
+  }
+  const teclado = botones => botones && botones.length ? { inline_keyboard: botones.map(b => [b]) } : undefined;
+
+  async function enviarTelegram(token, chat, { titulo, lineas = [], url, silencioso, botones }) {
     let texto = `<b>${escTg(titulo)}</b>`;
     const cuerpo = lineas.slice(0, 8).map(l => l.href
       ? `• <a href="${escTg(l.href)}">${escTg(recorta(l.text, 200))}</a>`
@@ -1192,14 +1242,98 @@ ol.steps li{margin:6px 0}
     if (lineas.length > 8) cuerpo.push(`… y ${lineas.length - 8} más`);
     if (cuerpo.length) texto += "\n" + cuerpo.join("\n");
     if (url) texto += `\n\n${escTg(url)}`;
-    const res = await fetch(`https://api.telegram.org/bot${encodeURIComponent(token).replace(/%3A/gi, ":")}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chat, text: texto, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: !!silencioso })
-    });
-    const j = await res.json().catch(() => ({}));
-    if (!j.ok) throw new Error("Telegram: " + (j.description || `error ${res.status}`));
+    await llamarTelegram("sendMessage", {
+      chat_id: chat, text: texto, parse_mode: "HTML", disable_web_page_preview: true,
+      disable_notification: !!silencioso, reply_markup: teclado(botones)
+    }, token);
   }
+
+  /* ---------- Botones de Telegram ----------
+     Mientras la página está abierta, pregunta a Telegram cada poco si se ha
+     pulsado algún botón de sus avisos. Si estaba cerrada, lo atiende al abrirla
+     (Telegram guarda las pulsaciones 24 horas). */
+  const mismoChat = (chat, destino) =>
+    !!chat && (String(chat.id) === String(destino) || (!!chat.username && `@${chat.username}`.toLowerCase() === String(destino).toLowerCase()));
+
+  // Copia de repartirUpdates (vigia/lib.mjs): la cola de Telegram es común con
+  // GitHub Actions y no hay que confirmar pulsaciones que son suyas.
+  function repartirUpdates(updates, esMia, ahora = Date.now()) {
+    const mias = [];
+    let offset = null, bloqueado = false;
+    for (const u of updates || []) {
+      const q = u.callback_query;
+      const mia = !!q && esMia(String(q.data || "").split(":")[0]);
+      if (mia) mias.push(q);
+      const fecha = (u.message || u.edited_message || u.channel_post || u.my_chat_member)?.date ?? 0;
+      if (q ? !mia : ahora / 1000 - fecha <= 3600) bloqueado = true;
+      if (!bloqueado) offset = u.update_id + 1;
+    }
+    return { mias, offset };
+  }
+
+  async function atenderBotonTg(q) {
+    const [accion, id] = String(q.data || "").split(":");
+    const responder = texto => llamarTelegram("answerCallbackQuery", { callback_query_id: q.id, text: texto.slice(0, 190) }).catch(() => {});
+    if (!mismoChat(q.message && q.message.chat, state.settings.tg.chat)) return responder("Este botón no es para este chat.");
+
+    const m = state.monitors.find(x => (x.sugTg || []).some(s => s.id === id));
+    const sug = m && m.sugTg.find(s => s.id === id);
+    let texto, botones;
+    if (!sug) {
+      texto = "Ese aviso es antiguo o su página ya no está en Vigía: no se ha cambiado nada.";
+    } else if (accion === "ws") {
+      texto = `🔕 Filtro añadido en ${host(m.url)}. ${aprenderFiltro(m, sug)}`;
+      botones = [{ text: "↩️ Deshacer", callback_data: `wd:${id}` }];
+      addLog(m, "info", "Filtro añadido desde Telegram");
+      toast({ title: "Filtro añadido desde Telegram", url: m.url, body: texto.replace(/^🔕 /, "") });
+    } else {
+      olvidarFiltro(m, sug);
+      texto = `↩️ Filtro retirado en ${host(m.url)}: vuelves a recibir avisos de esos cambios.`;
+      botones = [{ text: "🔕 No avisar de cambios como este", callback_data: `ws:${id}` }];
+      addLog(m, "info", "Filtro retirado desde Telegram");
+      toast({ title: "Filtro retirado desde Telegram", url: m.url, body: texto.replace(/^↩️ /, "") });
+    }
+    renderList();
+    await responder(texto);
+    if (q.message) {
+      const donde = { chat_id: q.message.chat.id, message_id: q.message.message_id };
+      await llamarTelegram("editMessageReplyMarkup", { ...donde, reply_markup: { inline_keyboard: [] } }).catch(() => {});
+      await llamarTelegram("sendMessage", {
+        chat_id: q.message.chat.id, text: texto, disable_notification: true,
+        reply_parameters: { message_id: q.message.message_id, allow_sending_without_reply: true },
+        reply_markup: teclado(botones)
+      }).catch(() => {});
+    }
+  }
+
+  let leyendoTg = false, avisadoWebhook = false;
+  async function atenderTelegramWeb() {
+    const tg = state.settings.tg;
+    if (leyendoTg || !tg.on || !tg.token || !tg.chat) return;
+    leyendoTg = true;
+    try {
+      const bot = (state.tgBot ||= {});
+      const updates = await llamarTelegram("getUpdates", { offset: bot.offset, timeout: 0 });
+      // «ws»/«wd» son de esta página; los de GitHub Actions («s»/«d») se quedan en la cola.
+      const { mias, offset } = repartirUpdates(updates, a => a === "ws" || a === "wd");
+      const atendidos = new Set(bot.atendidos || []);
+      for (const q of mias) {
+        if (atendidos.has(q.id)) continue;
+        atendidos.add(q.id);
+        await atenderBotonTg(q).catch(() => {});
+      }
+      bot.atendidos = [...atendidos].slice(-200);
+      if (offset != null) bot.offset = offset;
+      save();
+    } catch (err) {
+      if (err.status === 409 && !avisadoWebhook) {
+        avisadoWebhook = true;
+        toast({ kind: "error", title: "No se pueden leer los botones de Telegram", body: "Tu bot tiene un webhook activo. Quítalo con deleteWebhook si no lo usas para otra cosa." });
+      }
+    } finally { leyendoTg = false; }
+  }
+  setInterval(atenderTelegramWeb, 20000);
+  setTimeout(atenderTelegramWeb, 3000);
 
   async function enviarNtfy(server, topic, { titulo, lineas = [], url, silencioso }, token = state.settings.ntfy.token) {
     const click = lineas.length === 1 && lineas[0].href ? lineas[0].href : url;
