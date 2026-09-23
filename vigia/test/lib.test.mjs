@@ -4,6 +4,7 @@ import {
   hash, host, recorta, normTxt, lineasDe, toMin, enHorario,
   extraer, limpiarAleatorio, filtrar, palabras, coincide,
   partirEtiquetas, aplicarNormas, deducirNorma, normaValida,
+  prefijoComun, sugerirFiltro, describeNorma, repartirUpdates,
   esFeed, leerFeed, leerEnlaces, leerNumero, escTg,
   derivarClave, cifrar, descifrar
 } from "../lib.mjs";
@@ -284,4 +285,71 @@ test("derivarClave da 32 bytes y es determinista", () => {
   assert.equal(derivarClave("x").length, 32);
   assert.deepEqual(derivarClave("x"), derivarClave("x"));
   assert.equal(derivarClave(""), null);
+});
+
+/* ------------------------------------ «No avisar de cambios como este» */
+test("prefijoComun devuelve el principio compartido, recortado", () => {
+  assert.equal(prefijoComun("Visitas hoy: 120", "Visitas hoy: 121"), "Visitas hoy: 12");
+  assert.equal(prefijoComun("abc", "xyz"), "");
+});
+
+test("sugerirFiltro prefiere una norma de atributo cuando el cambio está en un valor", () => {
+  const f = sugerirFiltro({ removed: ['<link id="a1b2" rel="x">'], added: ['<link id="z9y8" rel="x">'] });
+  assert.deepEqual(f, { normas: [{ tag: "link", attr: "id" }], ignore: [] });
+  assert.match(describeNorma(f.normas[0]), /atributo id de <link>/);
+});
+
+test("sugerirFiltro no repite normas que ya existen", () => {
+  const f = sugerirFiltro({
+    removed: ['<link id="a1b2" rel="x">'], added: ['<link id="z9y8" rel="x">'],
+    normas: [{ tag: "link", attr: "id" }]
+  });
+  assert.equal(f, null);
+});
+
+test("sugerirFiltro recurre a ignorar la línea si el cambio está en el texto", () => {
+  const base = ["Titular", "Otra cosa", "Más contenido", "Actualizado a las 10:32", "Pie"];
+  const f = sugerirFiltro({ removed: ["Actualizado a las 10:31"], added: ["Actualizado a las 10:32"], base });
+  assert.deepEqual(f, { normas: [], ignore: ["Actualizado a las 10:3"] });
+});
+
+test("sugerirFiltro descarta reglas que se tragarían media página o son muy cortas", () => {
+  const base = ["Precio del producto: 10", "Precio del producto: 20", "Precio del producto: 30", "Precio del producto: 40", "Otra"];
+  assert.equal(sugerirFiltro({ removed: ["Precio del producto: 10"], added: ["Precio del producto: 90"], base }), null);
+  assert.equal(sugerirFiltro({ removed: ["Hoy 1"], added: ["Hoy 2"] }), null);
+  assert.equal(sugerirFiltro({ added: ["Solo añadido, sin pareja"] }), null);
+});
+
+test("sugerirFiltro no propone lo que ya se ignora", () => {
+  const f = sugerirFiltro({ removed: ["Actualizado a las 10:31"], added: ["Actualizado a las 10:32"], ignore: ["Actualizado a las 10:3"] });
+  assert.equal(f, null);
+});
+
+/* ------------------------------------ cola de Telegram compartida */
+const boton = (update_id, data) => ({ update_id, callback_query: { id: "q" + update_id, data } });
+const deActions = a => a === "s" || a === "d";
+const deWeb = a => a === "ws" || a === "wd";
+
+test("repartirUpdates recoge lo propio y confirma todo si nada es ajeno", () => {
+  const { mias, offset } = repartirUpdates([boton(1, "s:a"), boton(2, "d:a")], deActions);
+  assert.deepEqual(mias.map(q => q.id), ["q1", "q2"]);
+  assert.equal(offset, 3);
+});
+
+test("repartirUpdates no confirma más allá de una pulsación ajena", () => {
+  const ups = [boton(1, "s:a"), boton(2, "ws:b"), boton(3, "s:c")];
+  const actions = repartirUpdates(ups, deActions);
+  assert.deepEqual(actions.mias.map(q => q.id), ["q1", "q3"]);
+  assert.equal(actions.offset, 2); // la q2 de la página sigue en la cola
+  const web = repartirUpdates(ups, deWeb);
+  assert.deepEqual(web.mias.map(q => q.id), ["q2"]);
+  assert.equal(web.offset, null); // la q1 es de Actions: no se confirma nada
+});
+
+test("repartirUpdates deja los mensajes recientes para detectar el chat", () => {
+  const ahora = 1_000_000_000_000;
+  const msg = (update_id, haceSeg) => ({ update_id, message: { date: ahora / 1000 - haceSeg } });
+  assert.equal(repartirUpdates([msg(1, 7200), boton(2, "s:a")], deActions, ahora).offset, 3);
+  assert.equal(repartirUpdates([msg(1, 60), boton(2, "s:a")], deActions, ahora).offset, null);
+  assert.deepEqual(repartirUpdates([], deActions, ahora), { mias: [], offset: null });
 });

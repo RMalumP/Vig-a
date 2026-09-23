@@ -8,10 +8,12 @@ import {
   MAX_SEEN, hash, host, recorta, fmtNum, lineasDe, enHorario,
   raices, extraer, filtrar, palabras, coincide,
   esFeed, leerFeed, leerEnlaces, leerNumero, escTg,
+  sugerirFiltro, describeNorma, mismaNorma, normaValida, repartirUpdates,
   derivarClave, cifrar, descifrar
 } from "./lib.mjs";
 
 const ESTADO = process.env.ESTADO || "vigia-estado.json";
+const BOT = "_telegram"; // clave del estado reservada para el bot, no es una página
 const TOLERANCIA_MS = 90_000; // el cron de GitHub no es exacto
 const MAX_BYTES = 8 * 1024 * 1024; // páginas enormes: mejor avisar que agotar la memoria
 
@@ -19,7 +21,21 @@ const avisos = []; // problemas de configuración, para el resumen del job
 const anotar = texto => { if (!avisos.includes(texto)) avisos.push(texto); };
 
 /* ---------------------------------------------------------------- avisos */
-async function enviarTelegram({ titulo, lineas = [], url }) {
+async function llamarTelegram(metodo, cuerpo) {
+  const res = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/${metodo}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(cuerpo),
+    signal: AbortSignal.timeout(20_000)
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!j.ok) throw Object.assign(new Error("Telegram: " + (j.description || `error ${res.status}`)), { status: res.status });
+  return j.result;
+}
+
+const teclado = botones => botones?.length ? { inline_keyboard: botones.map(b => [b]) } : undefined;
+
+async function enviarTelegram({ titulo, lineas = [], url, botones }) {
   const { TELEGRAM_TOKEN: token, TELEGRAM_CHAT_ID: chat } = process.env;
   if (!token || !chat) return false;
   let texto = `<b>${escTg(titulo)}</b>`;
@@ -30,14 +46,9 @@ async function enviarTelegram({ titulo, lineas = [], url }) {
   if (cuerpo.length) texto += "\n" + cuerpo.join("\n");
   if (url) texto += `\n\n${escTg(url)}`;
   texto += "\n<i>(desde GitHub Actions)</i>";
-  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chat, text: texto, parse_mode: "HTML", disable_web_page_preview: true }),
-    signal: AbortSignal.timeout(20_000)
+  await llamarTelegram("sendMessage", {
+    chat_id: chat, text: texto, parse_mode: "HTML", disable_web_page_preview: true, reply_markup: teclado(botones)
   });
-  const j = await res.json().catch(() => ({}));
-  if (!j.ok) throw new Error("Telegram: " + (j.description || `error ${res.status}`));
   return true;
 }
 
@@ -139,10 +150,28 @@ async function descargar(url, validador) {
   };
 }
 
+// Los filtros aprendidos desde Telegram viven en el estado (el workflow no puede
+// tocar VIGIA_CONFIG) y se suman a los que vienen de la página.
+function conAprendido(m, st) {
+  if (!st.normasBot?.length && !st.ignorarBot?.length) return m;
+  return {
+    ...m,
+    normas: [...(m.normas || []), ...(st.normasBot || [])],
+    ignore: [m.ignore, ...(st.ignorarBot || [])].filter(Boolean).join("\n")
+  };
+}
+
+// Tras cambiar los filtros, la siguiente comprobación toma una referencia nueva
+// en vez de avisar de la diferencia que causa el propio filtro.
+function nuevaReferencia(st) {
+  for (const k of ["hash", "lines", "seen", "etag", "modificado"]) delete st[k];
+}
+
 async function revisar(m, st) {
   const firma = hash(JSON.stringify([m.url, m.watch, m.mode, m.selector, m.ignore, m.random, m.numCond, m.numValor, m.normas]));
   const rebase = st.firma !== firma;
   st.firma = firma;
+  m = conAprendido(m, st);
 
   // Solo preguntamos «¿ha cambiado?» si ya teníamos una referencia con esta configuración.
   const conRef = !rebase && (st.hash || st.seen || st.numero != null);
@@ -219,8 +248,103 @@ async function revisar(m, st) {
   const lineas = antesLineas
     ? [...added.slice(0, 8).map(t => ({ text: "+ " + t })), ...removed.slice(0, 3).map(t => ({ text: "− " + t }))]
     : [{ text: "La página ha cambiado." }];
-  await avisar({ titulo: `Cambio en ${host(m.url)}`, lineas, url: m.url });
+  await avisar({ titulo: `Cambio en ${host(m.url)}`, lineas, url: m.url, botones: botonSilenciar(m, st, { added, removed, base: lines }) });
   return `cambio +${added.length}/−${removed.length} (avisado)`;
+}
+
+/* ------------------------------------ «No avisar de cambios como este» (Telegram) */
+const MAX_SUGERENCIAS = 10;
+
+// Guarda en el estado el filtro que se aplicaría y devuelve el botón que lo pide.
+// callback_data solo admite 64 bytes: viaja un identificador, no el filtro.
+function botonSilenciar(m, st, cambio) {
+  if (!process.env.TELEGRAM_TOKEN || !process.env.TELEGRAM_CHAT_ID) return;
+  const f = sugerirFiltro({ ...cambio, normas: (m.normas || []).filter(normaValida), ignore: lineasDe(m.ignore) });
+  if (!f) return;
+  const id = hash(`${m.id}|${JSON.stringify(f)}|${Date.now()}|${Math.random()}`).slice(0, 12);
+  st.sugerencias = [{ id, ...f }, ...(st.sugerencias || [])].slice(0, MAX_SUGERENCIAS);
+  return [{ text: "🔕 No avisar de cambios como este", callback_data: `s:${id}` }];
+}
+
+const describeFiltro = f => f.normas.length
+  ? `Ya no se mirará ${f.normas.map(describeNorma).join(" y ")}. Cualquier otro cambio en esas etiquetas te seguirá avisando.`
+  : `Se ignorarán las líneas que contengan ${f.ignore.map(p => `«${recorta(p, 60)}»`).join(", ")}.`;
+
+function aplicarFiltro(st, f) {
+  const normas = st.normasBot || [], ignorar = st.ignorarBot || [];
+  st.normasBot = [...normas, ...f.normas.filter(n => !normas.some(x => mismaNorma(x, n)))];
+  st.ignorarBot = [...ignorar, ...f.ignore.filter(p => !ignorar.includes(p))];
+}
+
+function quitarFiltro(st, f) {
+  st.normasBot = (st.normasBot || []).filter(n => !f.normas.some(x => mismaNorma(x, n)));
+  st.ignorarBot = (st.ignorarBot || []).filter(p => !f.ignore.includes(p));
+}
+
+const mismoChat = (chat, destino) =>
+  !!chat && (String(chat.id) === String(destino) || (!!chat.username && `@${chat.username}`.toLowerCase() === String(destino).toLowerCase()));
+
+async function atenderBoton(q, monitors, estado) {
+  const [accion, id] = String(q.data || "").split(":");
+  const responder = texto => llamarTelegram("answerCallbackQuery", { callback_query_id: q.id, text: texto }).catch(() => {});
+  // Solo quien está en el chat de los avisos puede cambiar los filtros.
+  if (!mismoChat(q.message?.chat, process.env.TELEGRAM_CHAT_ID)) { await responder("Este botón no es para este chat."); return; }
+
+  const idx = monitors.findIndex(x => estado[x.id]?.sugerencias?.some(s => s.id === id));
+  const m = monitors[idx], st = m && estado[m.id];
+  const sug = st?.sugerencias.find(s => s.id === id);
+  let texto, botones;
+  if (!sug) {
+    texto = "Ese aviso es antiguo o su página ya no se vigila desde GitHub: no se ha cambiado nada.";
+  } else if (accion === "s") {
+    if (!sug.aplicada) { aplicarFiltro(st, sug); sug.aplicada = true; nuevaReferencia(st); }
+    texto = `🔕 Filtro añadido en ${host(m.url)}. ${describeFiltro(sug)}`;
+    botones = [{ text: "↩️ Deshacer", callback_data: `d:${id}` }];
+  } else if (accion === "d") {
+    if (sug.aplicada) { quitarFiltro(st, sug); sug.aplicada = false; nuevaReferencia(st); }
+    texto = `↩️ Filtro retirado en ${host(m.url)}: vuelves a recibir avisos de esos cambios.`;
+    botones = [{ text: "🔕 No avisar de cambios como este", callback_data: `s:${id}` }];
+  } else { await responder("Botón desconocido."); return; }
+
+  await responder(texto.slice(0, 190));
+  if (q.message) {
+    const donde = { chat_id: q.message.chat.id, message_id: q.message.message_id };
+    await llamarTelegram("editMessageReplyMarkup", { ...donde, reply_markup: { inline_keyboard: [] } }).catch(() => {});
+    await llamarTelegram("sendMessage", {
+      chat_id: q.message.chat.id, text: texto, disable_notification: true,
+      reply_parameters: { message_id: q.message.message_id, allow_sending_without_reply: true },
+      reply_markup: teclado(botones)
+    });
+  }
+  // Para el registro, que es público: sin direcciones.
+  return sug ? `página ${idx + 1}: filtro ${accion === "s" ? "añadido" : "retirado"}` : "botón de un aviso antiguo";
+}
+
+// El workflow no tiene servidor que reciba los botones al momento: al empezar
+// cada ejecución pregunta a Telegram qué se ha pulsado desde la anterior.
+async function atenderTelegram(monitors, estado) {
+  if (!process.env.TELEGRAM_TOKEN || !process.env.TELEGRAM_CHAT_ID) return [];
+  const bot = (estado[BOT] ||= {});
+  let updates;
+  try { updates = await llamarTelegram("getUpdates", { offset: bot.offset, timeout: 0 }); }
+  catch (e) {
+    anotar(e.status === 409
+      ? "Tu bot de Telegram tiene un *webhook* activo, así que Vigía no puede leer los botones «No avisar de cambios como este». Quítalo con `deleteWebhook` si no lo usas para otra cosa."
+      : `No se pudieron leer los botones de Telegram — ${e.message}`);
+    return [];
+  }
+  // «s»/«d» son de este workflow; los de la página («ws»/«wd») se dejan en la cola.
+  const { mias, offset } = repartirUpdates(updates, a => a === "s" || a === "d");
+  const atendidos = new Set(bot.atendidos || []), hechos = [];
+  for (const q of mias) {
+    if (atendidos.has(q.id)) continue;
+    atendidos.add(q.id); // aunque falle la respuesta: el filtro ya está hecho y no se repite
+    try { const r = await atenderBoton(q, monitors, estado); if (r) hechos.push(r); }
+    catch (e) { anotar(`No se pudo atender un botón de Telegram — ${e.message}`); }
+  }
+  bot.atendidos = [...atendidos].slice(-200);
+  if (offset != null) bot.offset = offset;
+  return hechos;
 }
 
 /* ---------------------------------------------------------------- principal */
@@ -244,9 +368,10 @@ try { estado = descifrar(await readFile(ESTADO, "utf8"), clave) || {}; }
 catch { console.log("Sin estado previo válido: se tomarán referencias nuevas."); }
 
 // Olvidar páginas que ya no están en la lista
-for (const id of Object.keys(estado)) if (!monitors.some(m => m.id === id)) delete estado[id];
+for (const id of Object.keys(estado)) if (id !== BOT && !monitors.some(m => m.id === id)) delete estado[id];
 
 const resumen = [];
+for (const r of await atenderTelegram(monitors, estado)) resumen.push(["Telegram", r]);
 for (const [idx, m] of monitors.entries()) {
   const st = (estado[m.id] ||= {});
   const intervalo = Math.max(60, Number(m.interval) || 300) * 1000;

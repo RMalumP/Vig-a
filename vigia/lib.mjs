@@ -120,6 +120,53 @@ export function deducirNorma(viejo, nuevo) {
   return normaValida(norma) ? norma : null;
 }
 
+export const mismaNorma = (a, b) => a.tag === b.tag && a.attr === b.attr;
+export const describeNorma = n => `el atributo ${n.attr} de ${n.tag === "*" ? "cualquier etiqueta" : `<${n.tag}>`}`;
+
+export function prefijoComun(a, b) {
+  let p = 0;
+  while (p < a.length && p < b.length && a[p] === b[p]) p++;
+  return a.slice(0, Math.min(p, 80)).trim();
+}
+
+// Qué filtro propondría el botón «No avisar de cambios como este», igual que en
+// la página: primero normas de atributo (precisas); si no hay, ignorar las líneas
+// por su principio común, salvo que la regla fuera a tragarse media página.
+export function sugerirFiltro({ added = [], removed = [], base = [], normas = [], ignore = [] }) {
+  const pares = Math.min(added.length, removed.length);
+  const nuevas = [];
+  for (let i = 0; i < pares; i++) {
+    const n = deducirNorma(removed[i], added[i]);
+    if (n && !nuevas.some(x => mismaNorma(x, n)) && !normas.some(x => mismaNorma(x, n))) nuevas.push(n);
+  }
+  if (nuevas.length) return { normas: nuevas, ignore: [] };
+  const seguro = p => p.length >= 15 && (base.length < 4 || base.filter(l => l.includes(p)).length <= Math.max(1, base.length * 0.3));
+  const prefijos = [];
+  for (let i = 0; i < pares; i++) prefijos.push(prefijoComun(added[i], removed[i]));
+  const lineas = [...new Set(prefijos)].filter(p => seguro(p) && !ignore.includes(p));
+  return lineas.length ? { normas: [], ignore: lineas } : null;
+}
+
+// Telegram guarda una sola cola de novedades por bot, y la leen dos: la página
+// abierta (botones «w…») y GitHub Actions (botones «s»/«d»). Confirmar la cola
+// hasta un punto la borra para los dos, así que cada uno solo confirma hasta la
+// primera pulsación ajena (o mensaje reciente, que la página usa para detectar
+// el chat). Lo propio que quede detrás se vuelve a leer: hay que llevar la
+// cuenta de lo ya atendido. Lo que nadie recoge, Telegram lo borra a las 24 h.
+export function repartirUpdates(updates, esMia, ahora = Date.now()) {
+  const mias = [];
+  let offset = null, bloqueado = false;
+  for (const u of updates || []) {
+    const q = u.callback_query;
+    const mia = !!q && esMia(String(q.data || "").split(":")[0]);
+    if (mia) mias.push(q);
+    const fecha = (u.message || u.edited_message || u.channel_post || u.my_chat_member)?.date ?? 0;
+    if (q ? !mia : ahora / 1000 - fecha <= 3600) bloqueado = true;
+    if (!bloqueado) offset = u.update_id + 1;
+  }
+  return { mias, offset };
+}
+
 export function limpiarAleatorio(line) {
   return line
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "‹id›")
