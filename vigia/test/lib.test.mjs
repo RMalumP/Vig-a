@@ -317,12 +317,12 @@ test("sugerirFiltro descarta reglas que se tragarían media página o son muy co
   const base = ["Precio del producto: 10", "Precio del producto: 20", "Precio del producto: 30", "Precio del producto: 40", "Otra"];
   assert.equal(sugerirFiltro({ removed: ["Precio del producto: 10"], added: ["Precio del producto: 90"], base }), null);
   assert.equal(sugerirFiltro({ removed: ["Hoy 1"], added: ["Hoy 2"] }), null);
-  assert.equal(sugerirFiltro({ added: ["Solo añadido, sin pareja"] }), null);
 });
 
-test("sugerirFiltro no propone lo que ya se ignora", () => {
+test("sugerirFiltro no repite una regla ya puesta y recurre a la parte fija", () => {
   const f = sugerirFiltro({ removed: ["Actualizado a las 10:31"], added: ["Actualizado a las 10:32"], ignore: ["Actualizado a las 10:3"] });
-  assert.equal(f, null);
+  assert.deepEqual(f, { normas: [], ignore: ["Actualizado a las"] });
+  assert.equal(sugerirFiltro({ removed: ["Actualizado a las 10:31"], added: ["Actualizado a las 10:32"], ignore: ["Actualizado a las 10:3", "Actualizado a las"] }), null);
 });
 
 /* ------------------------------------ cola de Telegram compartida */
@@ -375,4 +375,16 @@ test("sugerirNovedades usa el texto entero si no hay cifras y respeta el 30 %", 
   const todos = items("Precio del día 1", "Precio del día 2", "Precio del día 3", "otra");
   assert.equal(sugerirNovedades({ nuevos: items("Precio del día 3"), todos }), null);
   assert.equal(sugerirNovedades({ nuevos: items("Actualizado a las 10:32"), todos: items("Actualizado a las 10:32", "x", "y"), ignore: ["Actualizado a las"] }), null);
+});
+
+/* ------------------------------------ reglas aprendidas sobre líneas neutralizadas */
+test("filtrar aplica las reglas que contienen ‹var› o ‹código›", () => {
+  const lines = ['<link id="abc1" rel="alternate" href="/x">', '<p>Contenido', `<a data-t="${"a1".repeat(12)}">Token`];
+  const m = { normas: [{ tag: "link", attr: "id" }], ignore: '<link id="‹var›" rel="alternate"\n<a data-t="‹código›', random: true };
+  assert.deepEqual(filtrar(lines, m), ["<p>Contenido"]);
+});
+
+test("sugerirFiltro propone la parte fija si solo aparecen líneas", () => {
+  const base = ["a", "b", "c", "d", "Aviso temporal número 7"];
+  assert.deepEqual(sugerirFiltro({ added: ["Aviso temporal número 7"], base }), { normas: [], ignore: ["Aviso temporal número"] });
 });

@@ -144,7 +144,11 @@ export function sugerirFiltro({ added = [], removed = [], base = [], normas = []
   const prefijos = [];
   for (let i = 0; i < pares; i++) prefijos.push(prefijoComun(added[i], removed[i]));
   const lineas = [...new Set(prefijos)].filter(p => seguro(p) && !ignore.includes(p));
-  return lineas.length ? { normas: [], ignore: lineas } : null;
+  if (lineas.length) return { normas: [], ignore: lineas };
+  // Sin parejas útiles (líneas que solo aparecen o solo desaparecen): la parte
+  // fija de cada línea, como en los avisos de novedades.
+  const txt = t => ({ text: t });
+  return sugerirNovedades({ nuevos: [...added, ...removed].map(txt), todos: base.map(txt), ignore });
 }
 
 // Para avisos de novedades (líneas, enlaces o entradas nuevas) no hay pareja
@@ -195,10 +199,13 @@ export function limpiarAleatorio(line) {
 
 export function filtrar(lines, m) {
   const reglas = lineasDe(m.ignore);
-  let out = reglas.length ? lines.filter(l => !reglas.some(r => l.includes(r))) : lines;
+  const fuera = l => !reglas.some(r => l.includes(r));
+  let out = reglas.length ? lines.filter(fuera) : lines;
   out = aplicarNormas(out, m.normas);
   if (m.random !== false) out = out.map(limpiarAleatorio);
-  return out;
+  // Las reglas aprendidas salen de líneas ya neutralizadas («‹var›», «‹código›»):
+  // también hay que buscarlas después, o no coincidirían nunca.
+  return reglas.length ? out.filter(fuera) : out;
 }
 
 export const palabras = m => lineasDe(m.keywords).map(normTxt);
