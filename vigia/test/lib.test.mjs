@@ -388,12 +388,13 @@ test("filtrar aplica las reglas que contienen ‹var› o ‹código›", () => 
 
 test("sugerirFiltro propone la parte fija si solo aparecen líneas", () => {
   const base = ["a", "b", "c", "d", "Aviso temporal número 7"];
-  assert.deepEqual(sugerirFiltro({ added: ["Aviso temporal número 7"], base }), { normas: [], ignore: ["Aviso temporal número"] });
+  assert.deepEqual(sugerirFiltro({ added: ["Aviso temporal número 7"], base }), { normas: [], ignore: ["Aviso temporal número"], orden: true });
 });
 
 test("sugerirFiltro: una etiqueta que aparece y desaparece se ignora tal cual (seg-social.es)", () => {
   const ul = '<ul class="col-md-12 listado-menu triangle bordeOut">';
   const base = ["<html>", "<body>", '<div class="menu">', "<li>Uno", "<li>Dos", "<p>Texto"];
-  assert.deepEqual(sugerirFiltro({ removed: [ul], base }), { normas: [], ignore: [ul] });
-  assert.deepEqual(sugerirFiltro({ added: [ul], base: [...base, ul] }), { normas: [], ignore: [ul] });
+  // A la vez aprende a no avisar si solo cambia el orden: su «</ul>» queda desparejado.
+  assert.deepEqual(sugerirFiltro({ removed: [ul], base }), { normas: [], ignore: [ul], orden: true });
+  assert.deepEqual(sugerirFiltro({ added: [ul], base: [...base, ul] }), { normas: [], ignore: [ul], orden: true });
 });
