@@ -1328,10 +1328,27 @@ ol.steps li{margin:6px 0}
     return { mias, offset };
   }
 
+  // Botón de los mensajes de prueba: solo confirma que los botones llegan.
+  const BOTON_PRUEBA = [{ text: "🔕 No avisar de novedades como esta (prueba)", callback_data: "wt:prueba" }];
+
   async function atenderBotonTg(q) {
     const [accion, id] = String(q.data || "").split(":");
     const responder = texto => llamarTelegram("answerCallbackQuery", { callback_query_id: q.id, text: texto.slice(0, 190) }).catch(() => {});
     if (!mismoChat(q.message && q.message.chat, state.settings.tg.chat)) return responder("Este botón no es para este chat.");
+
+    if (accion === "wt") {
+      const texto = "✅ Los botones funcionan. En un aviso de verdad, Vigía aprendería a ignorar ese ruido; en la prueba no se cambia nada.";
+      toast({ title: "Botón de prueba pulsado en Telegram", body: "Los botones de los avisos llegan bien a esta página." });
+      await responder(texto);
+      if (q.message) {
+        await llamarTelegram("editMessageReplyMarkup", { chat_id: q.message.chat.id, message_id: q.message.message_id, reply_markup: { inline_keyboard: [] } }).catch(() => {});
+        await llamarTelegram("sendMessage", {
+          chat_id: q.message.chat.id, text: texto, disable_notification: true,
+          reply_parameters: { message_id: q.message.message_id, allow_sending_without_reply: true }
+        }).catch(() => {});
+      }
+      return;
+    }
 
     const m = state.monitors.find(x => (x.sugTg || []).some(s => s.id === id));
     const sug = m && m.sugTg.find(s => s.id === id);
@@ -1371,8 +1388,8 @@ ol.steps li{margin:6px 0}
     try {
       const bot = (state.tgBot ||= {});
       const updates = await llamarTelegram("getUpdates", { offset: bot.offset, timeout: 0 });
-      // «ws»/«wd» son de esta página; los de GitHub Actions («s»/«d») se quedan en la cola.
-      const { mias, offset } = repartirUpdates(updates, a => a === "ws" || a === "wd");
+      // «ws»/«wd»/«wt» son de esta página; los de GitHub Actions («s»/«d») se quedan en la cola.
+      const { mias, offset } = repartirUpdates(updates, a => a === "ws" || a === "wd" || a === "wt");
       const atendidos = new Set(bot.atendidos || []);
       for (const q of mias) {
         if (atendidos.has(q.id)) continue;
@@ -1390,6 +1407,10 @@ ol.steps li{margin:6px 0}
     } finally { leyendoTg = false; }
   }
   setInterval(atenderTelegramWeb, 20000);
+  // Tras enviar una prueba, se mira más a menudo para que el botón responda enseguida.
+  let pruebaHasta = 0;
+  setInterval(() => { if (Date.now() < pruebaHasta) atenderTelegramWeb(); }, 3000);
+  const esperarBotonPrueba = () => { pruebaHasta = Date.now() + 120000; };
   setTimeout(atenderTelegramWeb, 3000);
 
   async function enviarNtfy(server, topic, { titulo, lineas = [], url, silencioso }, token = state.settings.ntfy.token) {
@@ -1968,9 +1989,14 @@ ol.steps li{margin:6px 0}
   $("#tgTest").onclick = e => conBoton(e.target, async () => {
     try {
       await enviarTelegram($("#tgToken").value.trim(), $("#tgChat").value.trim(), {
-        titulo: "Vigía: mensaje de prueba", lineas: [{ text: "Los avisos por Telegram funcionan." }], url: location.href.split("#")[0]
+        titulo: "Vigía: mensaje de prueba", lineas: [{ text: "Los avisos por Telegram funcionan." }], url: location.href.split("#")[0],
+        botones: BOTON_PRUEBA
       });
-      toast({ title: "Prueba enviada", body: "Revisa Telegram." });
+      esperarBotonPrueba();
+      const lee = S.tg.on && S.tg.token && S.tg.chat;
+      toast({ title: "Prueba enviada", body: lee
+        ? "Revisa Telegram y pulsa el botón del mensaje: con esta página abierta, te contestará en unos segundos."
+        : "Revisa Telegram. Para que esta página atienda el botón del mensaje, marca «Enviar avisos por Telegram» y guarda el token y el chat." });
     } catch (err) { toast({ kind: "error", title: "No se pudo enviar", body: err.message }); }
   });
 
@@ -2028,7 +2054,9 @@ ol.steps li{margin:6px 0}
     toast({
       kind: "changed", sticky: true, title: "Aviso de prueba", url: location.href.split("#")[0],
       summary: "Así se verá una novedad",
-      listHtml: `<li><a href="#" onclick="return false">Nueva convocatoria publicada</a></li><li>Actualizado el horario de atención</li>`
+      listHtml: `<li><a href="#" onclick="return false">Nueva convocatoria publicada</a></li><li>Actualizado el horario de atención</li>`,
+      ignoreLabel: "No avisar de novedades como esta",
+      onIgnore: () => toast({ title: "Así funciona el botón", body: "En un aviso de verdad, Vigía aprendería a ignorar ese ruido. En la prueba no se cambia nada." })
     });
     lastRepeat = Date.now();
     beep();
@@ -2036,7 +2064,8 @@ ol.steps li{margin:6px 0}
       try { new Notification("Vigía: aviso de prueba", { body: "Las notificaciones del sistema funcionan." }); } catch (_) {}
     }
     const moviles = (S.tg.on && S.tg.token && S.tg.chat) || (S.ntfy.on && S.ntfy.topic);
-    if (moviles) enviarMovil({ titulo: "Vigía: aviso de prueba", lineas: [{ text: "Nueva convocatoria publicada" }], url: location.href.split("#")[0] });
+    if (moviles) enviarMovil({ titulo: "Vigía: aviso de prueba", lineas: [{ text: "Nueva convocatoria publicada" }], url: location.href.split("#")[0], botones: BOTON_PRUEBA });
+    if (S.tg.on && S.tg.token && S.tg.chat) esperarBotonPrueba();
   };
 
   /* =====================================================================
