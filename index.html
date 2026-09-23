@@ -1420,21 +1420,6 @@ ol.steps li{margin:6px 0}
   const mismoChat = (chat, destino) =>
     !!chat && (String(chat.id) === String(destino) || (!!chat.username && `@${chat.username}`.toLowerCase() === String(destino).toLowerCase()));
 
-  // Copia de repartirUpdates (vigia/lib.mjs): la cola de Telegram es común con
-  // GitHub Actions y no hay que confirmar pulsaciones que son suyas.
-  function repartirUpdates(updates, esMia, ahora = Date.now()) {
-    const mias = [];
-    let offset = null, bloqueado = false;
-    for (const u of updates || []) {
-      const q = u.callback_query;
-      const mia = !!q && esMia(String(q.data || "").split(":")[0]);
-      if (mia) mias.push(q);
-      const fecha = (u.message || u.edited_message || u.channel_post || u.my_chat_member)?.date ?? 0;
-      if (q ? !mia : ahora / 1000 - fecha <= 3600) bloqueado = true;
-      if (!bloqueado) offset = u.update_id + 1;
-    }
-    return { mias, offset };
-  }
 
   // Botón de los mensajes de prueba: solo confirma que los botones llegan.
   const BOTON_PRUEBA = [{ text: "🔕 No avisar de novedades como esta (prueba)", callback_data: "wt:prueba" }];
@@ -1488,23 +1473,39 @@ ol.steps li{margin:6px 0}
     }
   }
 
+  // Menús y comandos del bot: el mismo código que usa GitHub Actions con la web
+  // cerrada (vigia/bot-core.mjs). Si no carga (p. ej. abriendo el archivo con
+  // file://), la web sigue atendiendo los botones de sus avisos.
+  const botCore = import("./vigia/bot-core.mjs").catch(() => null);
+  let comandosPuestos = false;
+
   let leyendoTg = false, avisadoWebhook = false;
   async function atenderTelegramWeb() {
     const tg = state.settings.tg;
     if (leyendoTg || !tg.on || !tg.token || !tg.chat) return;
     leyendoTg = true;
     try {
+      const core = await botCore;
       const bot = (state.tgBot ||= {});
-      const updates = await llamarTelegram("getUpdates", { offset: bot.offset, timeout: 0 });
-      // «ws»/«wd»/«wt» son de esta página; los de GitHub Actions («s»/«d») se quedan en la cola.
-      const { mias, offset } = repartirUpdates(updates, a => a === "ws" || a === "wd" || a === "wt");
-      const atendidos = new Set(bot.atendidos || []);
-      for (const q of mias) {
-        if (atendidos.has(q.id)) continue;
-        atendidos.add(q.id);
-        await atenderBotonTg(q).catch(() => {});
+      if (core && !comandosPuestos) {
+        comandosPuestos = true;
+        llamarTelegram("setMyCommands", { commands: core.COMANDOS.map(([command, description]) => ({ command, description })) }).catch(() => {});
       }
-      bot.atendidos = [...atendidos].slice(-200);
+      const updates = await llamarTelegram("getUpdates", { offset: bot.offset, timeout: 0 });
+      // Los botones de GitHub Actions («s»/«d») se quedan en la cola; menús y
+      // mensajes los atiende la web al momento mientras esté abierta.
+      const { mias, offset } = core
+        ? core.repartir(updates, { origen: "web", chat: tg.chat })
+        : { mias: updates.filter(u => /^w[sdt]:/.test(u.callback_query?.data || "")), offset: null };
+      const atendidos = new Set(bot.atendidos || []);
+      for (const u of mias) {
+        const clave = u.callback_query ? u.callback_query.id : "u" + u.update_id;
+        if (atendidos.has(clave)) continue;
+        atendidos.add(clave);
+        if (/^w[sdt]:/.test(u.callback_query?.data || "")) await atenderBotonTg(u.callback_query).catch(() => {});
+        else if (core) await core.responder(u, ctxBotWeb(), (m, b) => llamarTelegram(m, b)).catch(() => {});
+      }
+      bot.atendidos = [...atendidos].slice(-300);
       if (offset != null) bot.offset = offset;
       save();
     } catch (err) {
@@ -1837,6 +1838,7 @@ ol.steps li{margin:6px 0}
       case "pause":
         m.paused = !m.paused;
         if (!m.paused) m.nextAt = Date.now();
+        marcarGhPendiente(m);
         save(); renderList(); break;
       case "reset":
         Object.assign(m, { hash: null, lines: null, seen: null, numero: null, changes: 0, unseen: false, status: "idle",
@@ -1846,6 +1848,7 @@ ol.steps li{margin:6px 0}
         if (confirm(`¿Dejar de vigilar ${m.url}?`)) {
           state.monitors = state.monitors.filter(x => x !== m);
           marcarGhPendiente(m);
+          if (m.cloud) anotarBorradoGh(m);
           save(); renderList();
         }
         break;
@@ -2187,6 +2190,201 @@ ol.steps li{margin:6px 0}
   };
 
   /* =====================================================================
+     Bot de Telegram: lo que ve y cambia desde la web abierta
+     ===================================================================== */
+  const vistaBot = m => ({
+    id: m.id, url: m.url, watch: m.watch || "cambios", mode: m.mode || "text", interval: m.interval,
+    paused: !!m.paused, cloud: !!m.cloud,
+    ignore: reglasIgnorar(m), normas: (m.normas || []).filter(normaValida), orden: m.orden === "ignorar",
+    keywords: lineasDe(m.keywords),
+    estado: m.paused ? "paused" : m.status, mensaje: m.message, ultima: m.lastCheck, ultimoAviso: m.lastChange,
+    hist: (m.hist || []).map(h => ({ t: h.t, titulo: h.titulo, linea: h.lineas && h.lineas[0] ? h.lineas[0].text : "" }))
+  });
+
+  function ctxBotWeb() {
+    const nota = m => m.cloud && owner ? "✅ Guardado y enviado a GitHub" : m.cloud ? "✅ Guardado en la web (sin conexión a GitHub)" : "✅ Guardado";
+    return {
+      chat: S.tg.chat,
+      ahora: () => Date.now(),
+      info: () => ({
+        origen: "web", editable: true,
+        lineas: [owner ? "Los cambios en páginas de GitHub se le envían solos." : "La web no está conectada a GitHub (#propietario): los cambios se quedan en este navegador."]
+      }),
+      paginas: () => state.monitors.map(vistaBot),
+      global: () => { const g = GLOBAL(); return { ignore: lineasDe(g.ignore), normas: (g.normas || []).filter(normaValida), orden: !!g.orden }; },
+      async cambiar(id, c) {
+        const m = state.monitors.find(x => x.id === id);
+        if (!m) return;
+        let filtros = false;
+        if (c.interval != null) { m.interval = Math.max(10, Number(c.interval) || 300); m.nextAt = Math.min(m.nextAt || 0, Date.now() + m.interval * 1000); }
+        if (c.paused != null) { m.paused = !!c.paused; if (!m.paused) m.nextAt = Date.now(); }
+        if (c.ignore) { m.ignore = c.ignore.join("\n"); filtros = true; }
+        if (c.normas) { m.normas = c.normas; filtros = true; }
+        if (c.orden != null) { if (c.orden) m.orden = "ignorar"; else delete m.orden; filtros = true; }
+        if (c.keywords) { m.keywords = c.keywords.join("\n"); filtros = true; }
+        if (filtros) m.rebase = true;
+        marcarGhPendiente(m);
+        save(); renderList();
+        if (m.cloud) programarEnvioGh();
+        return { nota: nota(m) };
+      },
+      async cambiarGlobal(c) {
+        const g = GLOBAL();
+        if (c.ignore) g.ignore = c.ignore.join("\n");
+        if (c.normas) g.normas = c.normas;
+        if (c.orden != null) g.orden = !!c.orden;
+        g.editado = Date.now();
+        filtrosCambiados(state.monitors);
+        programarEnvioGh();
+        return { nota: "✅ Guardado para todas las páginas" };
+      },
+      async nueva({ url, watch }) {
+        try { url = normalizarUrl(url); } catch { return { error: "Esa dirección no es válida." }; }
+        if (state.monitors.some(m => m.url === url && (m.watch || "cambios") === watch)) return { error: "Esa página ya está en la lista." };
+        const m = {
+          id: uid(), url, interval: 900, watch, selector: "", mode: "text", proxy: "auto", ignore: "", keywords: "", random: true,
+          movil: true, cloud: !!owner, normVersion: NORM_VERSION, paused: false, changes: 0,
+          status: "idle", message: "", nextAt: Date.now(), createdAt: Date.now()
+        };
+        state.monitors.unshift(m);
+        marcarGhPendiente(m);
+        save(); renderList();
+        check(m);
+        if (m.cloud) programarEnvioGh();
+        addLog(m, "info", "Añadida desde Telegram");
+        return { id: m.id, nota: m.cloud ? "✅ Añadida en la web y en GitHub" : "✅ Añadida en la web" };
+      },
+      async borrar(id) {
+        const m = state.monitors.find(x => x.id === id);
+        if (!m) return;
+        state.monitors = state.monitors.filter(x => x !== m);
+        if (m.cloud) { anotarBorradoGh(m); programarEnvioGh(); }
+        save(); renderList();
+      },
+      async ejecutar() {
+        if (!owner) return "La web no está conectada a GitHub: entra con #propietario para lanzarlo desde aquí.";
+        try {
+          await gh(`/repos/${owner.repo}/actions/workflows/${WORKFLOW}/dispatches`, { method: "POST", body: { ref: owner.branch || "main" } });
+          return "🚀 Ejecución de GitHub Actions pedida";
+        } catch (err) { return `No se pudo lanzar GitHub Actions: ${err.message}`; }
+      }
+    };
+  }
+
+  /* =====================================================================
+     Lista compartida con GitHub (VIGIA_CONFIG)
+     =====================================================================
+     La escriben la web y GitHub Actions (cuando se cambia algo desde el bot con
+     la web cerrada). Cada página lleva «editado»; al leerla, la web se queda con
+     lo más reciente de cada una, y al escribirla fusiona antes para no pisar nada. */
+  const CAMPOS_GH = ["url", "interval", "watch", "mode", "selector", "ignore", "keywords", "random", "numCond", "numValor", "hDesde", "hHasta", "laborables", "normas", "orden", "paused"];
+
+  function anotarBorradoGh(m) {
+    const limite = Date.now() - 30 * 86400000;
+    state.borradosGh = [...(state.borradosGh || []).filter(b => b.t > limite && b.id !== m.id), { id: m.id, t: Date.now() }];
+  }
+
+  async function leerConfigGh() {
+    try {
+      const r = await gh(`/repos/${owner.repo}/actions/variables/VIGIA_CONFIG`);
+      return JSON.parse(r.value || "{}");
+    } catch (err) {
+      if (err.status === 404) return {};
+      throw err;
+    }
+  }
+
+  // Trae a la web lo cambiado desde el bot (o desde otro navegador). Devuelve cuántas cosas cambiaron.
+  function aplicarConfigGh(cfg) {
+    let n = 0;
+    const borradosLocal = new Map((state.borradosGh || []).map(b => [b.id, b.t]));
+    for (const c of cfg.monitors || []) {
+      if (!c || !c.id || !c.url) continue;
+      const m = state.monitors.find(x => x.id === c.id);
+      if (!m) {
+        if (borradosLocal.has(c.id) && borradosLocal.get(c.id) >= (c.editado || 0)) continue;
+        if (!c.editado) continue; // listas antiguas: sin fecha no se sabe si es nueva o la borraste aquí
+        const nueva = Object.assign({ id: c.id, mode: "text", proxy: "auto", random: true, movil: true, selector: "", ignore: "", keywords: "" },
+          pick(c, CAMPOS_GH), { cloud: true, editado: c.editado, normVersion: NORM_VERSION, changes: 0, status: "idle", message: "", nextAt: Date.now() + n * 1500, createdAt: Date.now() });
+        nueva.interval = Math.max(10, Number(nueva.interval) || 900);
+        state.monitors.push(nueva);
+        n++;
+        continue;
+      }
+      if ((c.editado || 0) <= (m.editado || 0)) continue;
+      CAMPOS_GH.forEach(k => { if (c[k] === undefined) delete m[k]; else m[k] = c[k]; });
+      Object.assign(m, { cloud: true, editado: c.editado, rebase: true });
+      if (!m.paused && (m.nextAt || 0) > Date.now() + m.interval * 1000) m.nextAt = Date.now();
+      n++;
+    }
+    for (const b of cfg.borrados || []) {
+      const m = state.monitors.find(x => x.id === b.id);
+      if (m && m.cloud && (m.editado || 0) <= b.t) { state.monitors = state.monitors.filter(x => x !== m); n++; }
+    }
+    const g = cfg.global;
+    if (g && (g.editado || 0) > (GLOBAL().editado || 0)) {
+      state.settings.global = { ignore: g.ignore || "", normas: (g.normas || []).filter(normaValida), orden: !!g.orden, editado: g.editado };
+      state.monitors.forEach(m => { m.rebase = true; });
+      n++;
+    }
+    return n;
+  }
+
+  let trayendoGh = false;
+  async function traerCambiosGh({ avisar = true } = {}) {
+    if (!owner || trayendoGh) return 0;
+    trayendoGh = true;
+    try {
+      const n = aplicarConfigGh(await leerConfigGh());
+      if (n) {
+        save(); renderList();
+        if (avisar) toast({ title: "Cambios recibidos de GitHub", body: `${n} ${n === 1 ? "cambio hecho" : "cambios hechos"} desde el bot de Telegram (o desde otro navegador).` });
+      }
+      return n;
+    } catch { return 0; }
+    finally { trayendoGh = false; }
+  }
+
+  function configLocalGh() {
+    const zona = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const g = GLOBAL();
+    return {
+      version: 2, actualizado: new Date().toISOString(),
+      global: { ignore: lineasDe(g.ignore).join("\n"), normas: (g.normas || []).filter(normaValida), orden: !!g.orden, editado: g.editado || 0 },
+      monitors: state.monitors.filter(m => m.cloud).map(m => Object.assign(
+        pick(m, ["id", "url", "interval", "watch", "mode", "selector", "keywords", "random", "numCond", "numValor", "hDesde", "hHasta", "laborables", "orden"]),
+        { ignore: reglasIgnorar(m).join("\n"), normas: (m.normas || []).filter(normaValida), paused: !!m.paused, editado: m.editado || 0, zona })),
+      borrados: state.borradosGh || []
+    };
+  }
+
+  // Trae lo remoto, fusiona y escribe. Devuelve el número de páginas enviadas.
+  async function enviarListaGh() {
+    const core = await botCore;
+    let remoto = {};
+    try { remoto = await leerConfigGh(); aplicarConfigGh(remoto); } catch (err) { if (err.status !== 404) throw err; }
+    const local = configLocalGh();
+    const final = core ? core.fusionarConfigs(remoto, local) : local;
+    final.monitors = final.monitors.filter(c => state.monitors.some(m => m.id === c.id && m.cloud));
+    const valor = JSON.stringify(final);
+    const LIMITE = 47000; // GitHub admite 48 KB por variable
+    if (valor.length > LIMITE) throw Object.assign(new Error("GitHub admite hasta 48 KB por variable. Reduce filtros o páginas."), { grande: true });
+    await ponerVariable("VIGIA_CONFIG", valor);
+    await ponerVariable("VIGIA_ACTIVO", final.monitors.length ? "true" : "false");
+    localStorage.removeItem(OWNER_KEY + ":pendiente");
+    save(); renderList(); pintarPendiente();
+    return { n: final.monitors.length, ocupacion: valor.length / LIMITE };
+  }
+
+  // Los cambios hechos desde el bot se envían solos (no hay nadie delante para pulsar el botón).
+  let envioGh = null;
+  function programarEnvioGh() {
+    if (!owner) return;
+    clearTimeout(envioGh);
+    envioGh = setTimeout(() => enviarListaGh().catch(err => errorGh(err, "enviar a GitHub los cambios del bot")), 2500);
+  }
+
+  /* =====================================================================
      Panel de control: resumen, reglas globales y filtros de cada página
      ===================================================================== */
   const DIA = 86400000;
@@ -2364,7 +2562,7 @@ ol.steps li{margin:6px 0}
       toast({ title: "Sin cambios", body: "Las reglas globales ya eran esas." });
       return;
     }
-    state.settings.global = nuevo;
+    state.settings.global = Object.assign(nuevo, { editado: Date.now() });
     filtrosCambiados(state.monitors);
     renderPanel();
     toast({ title: "Reglas globales guardadas", body: `Se aplican a las ${state.monitors.length} páginas. Cada una tomará una referencia nueva sin avisar.` });
@@ -2393,6 +2591,7 @@ ol.steps li{margin:6px 0}
       state.monitors.forEach(x => { delete x.orden; });
       texto = "Ninguna página avisará si solo cambia el orden de las líneas.";
     } else return;
+    g.editado = Date.now();
     filtrosCambiados(state.monitors);
     renderPanel();
     toast({ title: "Regla global añadida", body: texto });
@@ -2423,8 +2622,8 @@ ol.steps li{margin:6px 0}
       const t = b.dataset.todas;
       state.monitors.forEach(x => {
         if (t === "now" && !x.paused) { x.unseen = false; check(x); }
-        if (t === "pause") x.paused = true;
-        if (t === "resume" && x.paused) { x.paused = false; x.nextAt = Date.now() + Math.random() * 3000; }
+        if (t === "pause" && !x.paused) { x.paused = true; marcarGhPendiente(x); }
+        if (t === "resume" && x.paused) { x.paused = false; x.nextAt = Date.now() + Math.random() * 3000; marcarGhPendiente(x); }
       });
       save(); renderList(); renderPanel();
     } else if (b.dataset.aviso != null) {
@@ -2611,6 +2810,7 @@ ol.steps li{margin:6px 0}
   });
 
   function marcarGhPendiente(m, antes = false) {
+    if (m) m.editado = Date.now(); // para saber qué versión es la más reciente al sincronizar
     if (owner && m && (m.cloud || antes)) {
       localStorage.setItem(OWNER_KEY + ":pendiente", "1");
       pintarPendiente();
@@ -2648,28 +2848,17 @@ ol.steps li{margin:6px 0}
   }
 
   $("#ghSync").onclick = e => conBoton(e.target, async () => {
-    const zona = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    // Las reglas globales viajan ya sumadas a las de cada página.
-    const monitors = state.monitors.filter(m => m.cloud && !m.paused).map(m => Object.assign(
-      pick(m, ["id", "url", "interval", "watch", "mode", "selector", "keywords", "random", "numCond", "numValor", "hDesde", "hHasta", "laborables"]),
-      { ignore: reglasDe(m).join("\n"), normas: normasDe(m), zona },
-      ordenDe(m) ? { orden: "ignorar" } : {}));
-    const valor = JSON.stringify({ version: 1, actualizado: new Date().toISOString(), monitors });
-    const LIMITE = 47000; // GitHub admite 48 KB por variable
-    if (valor.length > LIMITE) { toast({ kind: "error", title: "Lista demasiado grande", body: "GitHub admite hasta 48 KB por variable. Reduce filtros o páginas." }); return; }
-    if (valor.length > LIMITE * 0.8) {
-      toast({ kind: "info", title: "La lista se está quedando sin sitio",
-        body: `Ocupa el ${Math.round(valor.length / LIMITE * 100)} % de lo que admite GitHub. Acorta los filtros o quita páginas antes de llegar al tope.` });
-    }
     try {
-      await ponerVariable("VIGIA_CONFIG", valor);
-      await ponerVariable("VIGIA_ACTIVO", monitors.length ? "true" : "false");
-      localStorage.removeItem(OWNER_KEY + ":pendiente");
-      pintarPendiente();
-      toast({ title: "Lista enviada a GitHub", body: monitors.length
-        ? `${monitors.length} ${monitors.length === 1 ? "página" : "páginas"}. El workflow las comprobará en su próxima ejecución.`
+      const { n, ocupacion } = await enviarListaGh();
+      if (ocupacion > 0.8) toast({ kind: "info", title: "La lista se está quedando sin sitio",
+        body: `Ocupa el ${Math.round(ocupacion * 100)} % de lo que admite GitHub. Acorta los filtros o quita páginas antes de llegar al tope.` });
+      toast({ title: "Lista enviada a GitHub", body: n
+        ? `${n} ${n === 1 ? "página" : "páginas"}. El workflow las comprobará en su próxima ejecución.`
         : "No hay páginas marcadas, así que el workflow queda desactivado." });
-    } catch (err) { errorGh(err, "enviar la lista"); }
+    } catch (err) {
+      if (err.grande) toast({ kind: "error", title: "Lista demasiado grande", body: err.message });
+      else errorGh(err, "enviar la lista");
+    }
   });
 
   $("#ghRun").onclick = e => conBoton(e.target, async () => {
@@ -2716,7 +2905,8 @@ ol.steps li{margin:6px 0}
   mostrarPanelOwner();
   renderLog();
   revisarHash();
-  if (owner) verEjecuciones();
+  if (owner) { verEjecuciones(); traerCambiosGh(); }
+  setInterval(() => { if (owner && !document.hidden) traerCambiosGh(); }, 5 * 60000);
 })();
 </script>
 </body>
