@@ -539,7 +539,7 @@ ol.steps li{margin:6px 0}
   const STORE_KEY = "vigia:v1";
   const OWNER_KEY = "vigia:propietario";
   const RING_C = 2 * Math.PI * 27;
-  const NORM_VERSION = 2;
+  const NORM_VERSION = 3;
   const MAX_SEEN = 5000;
   let owner = null;
   // El token puede guardarse en este equipo (localStorage) o solo mientras dure
@@ -801,10 +801,13 @@ ol.steps li{margin:6px 0}
   const palabras = m => lineasDe(m.keywords).map(normTxt);
   function filtrar(lines, m) {
     const reglas = reglasIgnorar(m);
-    let out = reglas.length ? lines.filter(l => !reglas.some(r => l.includes(r))) : lines;
+    const fuera = l => !reglas.some(r => l.includes(r));
+    let out = reglas.length ? lines.filter(fuera) : lines;
     out = aplicarNormas(out, m.normas);
     if (m.random !== false) out = out.map(limpiarAleatorio);
-    return out;
+    // Las reglas aprendidas salen de líneas ya neutralizadas («‹var›», «‹código›»):
+    // también hay que buscarlas después, o no coincidirían nunca.
+    return reglas.length ? out.filter(fuera) : out;
   }
   function coincide(text, kws) {
     if (!kws.length) return true;
@@ -1094,11 +1097,17 @@ ol.steps li{margin:6px 0}
     // Una regla que se tragara media página dejaría el aviso ciego: se descarta.
     const base = m.lines || [];
     const seguro = p => p.length >= 15 && (base.length < 4 || base.filter(l => l.includes(p)).length <= Math.max(1, base.length * 0.3));
-    const unicos = normasNuevas.length ? [] : [...new Set(prefijos)].filter(seguro);
+    const unicos = normasNuevas.length ? [] : [...new Set(prefijos)].filter(p => seguro(p) && !reglasIgnorar(m).includes(p));
+    // Sin parejas útiles (líneas que solo aparecen o solo desaparecen): la parte
+    // fija de cada línea, como en los avisos de novedades.
+    const suelta = d && !normasNuevas.length && !unicos.length
+      ? sugerirNovedades({ nuevos: [...d.added, ...d.removed].map(text => ({ text })), todos: base.map(text => ({ text })), ignore: reglasIgnorar(m) })
+      : null;
 
     // La misma propuesta sirve para el botón de aquí y para el de Telegram:
     // pulsar uno deja el otro sin efecto.
-    const sug = normasNuevas.length || unicos.length ? nuevaSugerencia(m, { normas: normasNuevas, ignore: normasNuevas.length ? [] : unicos }) : null;
+    const sug = normasNuevas.length || unicos.length ? nuevaSugerencia(m, { normas: normasNuevas, ignore: normasNuevas.length ? [] : unicos })
+      : suelta ? nuevaSugerencia(m, suelta) : null;
 
     const titulo = `Cambio en ${host(m.url)}`;
     toast({
@@ -1115,6 +1124,9 @@ ol.steps li{margin:6px 0}
     const lineas = d ? [...d.added.slice(0, 8).map(t => ({ text: "+ " + t })), ...d.removed.slice(0, 3).map(t => ({ text: "− " + t }))] : [{ text: "La página ha cambiado." }];
     registrar(m, titulo, lineas);
     addLog(m, "changed", d ? `Cambio: +${d.added.length} / −${d.removed.length} líneas` : "Cambio detectado");
+    if (!sug) addLog(m, "info", d
+      ? "Sin botón para silenciar: no se encontró una regla segura para este cambio."
+      : "Sin botón para silenciar: no había copia de la versión anterior (página muy grande o almacenamiento lleno).");
     avisarFuera(m, titulo, lineas, m.url, sug ? [{ text: "🔕 No avisar de cambios como este", callback_data: `ws:${sug.id}` }] : null);
   }
 

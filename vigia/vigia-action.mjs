@@ -13,6 +13,7 @@ import {
 } from "./lib.mjs";
 
 const ESTADO = process.env.ESTADO || "vigia-estado.json";
+const FILTRADO = 2;
 const BOT = "_telegram"; // clave del estado reservada para el bot, no es una página
 const TOLERANCIA_MS = 90_000; // el cron de GitHub no es exacto
 const MAX_BYTES = 8 * 1024 * 1024; // páginas enormes: mejor avisar que agotar la memoria
@@ -168,7 +169,9 @@ function nuevaReferencia(st) {
 }
 
 async function revisar(m, st) {
-  const firma = hash(JSON.stringify([m.url, m.watch, m.mode, m.selector, m.ignore, m.random, m.numCond, m.numValor, m.normas]));
+  // FILTRADO: sube cuando cambia cómo se filtran las líneas, para tomar una
+  // referencia nueva en vez de avisar de la diferencia.
+  const firma = hash(JSON.stringify([FILTRADO, m.url, m.watch, m.mode, m.selector, m.ignore, m.random, m.numCond, m.numValor, m.normas]));
   const rebase = st.firma !== firma;
   st.firma = firma;
   m = conAprendido(m, st);
