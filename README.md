@@ -131,6 +131,25 @@ otras no), aprende a ignorar esa línea exacta. Y si lo único que cambia es el
 orden de las líneas o cuántas veces se repite alguna, el botón es **«No avisar si
 solo cambia el orden»**: a partir de ahí solo cuenta qué líneas hay.
 
+#### Panel de control
+
+Con muchas páginas, el botón **«⚙ Panel de control»** (abajo, siempre visible)
+lo reúne todo en un sitio:
+
+- **Resumen**: páginas activas, con errores, avisos de las últimas 24 horas y
+  canales de aviso al móvil.
+- **Necesita atención**: páginas que fallan, páginas ruidosas (5 avisos o más
+  en 24 horas, que suelen ser falsos positivos), páginas con un feed RSS más
+  fiable, cambios sin enviar a GitHub y avisos al móvil sin configurar.
+- **Reglas globales**, que se aplican a todas las páginas: líneas a ignorar,
+  atributos que nunca se miran (`nonce`, `link id`…) y no avisar si solo cambia
+  el orden. También viajan a GitHub Actions al pulsar «Enviar lista a GitHub».
+- **Filtros de cada página**, con buscador: cada filtro se quita con × y se
+  convierte en global con «→ global» (se quita entonces de las páginas que lo
+  tenían repetido). También se pueden comprobar, pausar o reanudar todas a la vez.
+
+Cambiar un filtro hace que la página tome una referencia nueva sin avisar.
+
 #### Desde Telegram
 
 Los avisos que llegan por Telegram llevan el mismo botón,

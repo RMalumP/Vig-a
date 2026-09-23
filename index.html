@@ -152,6 +152,43 @@ ol.steps li{margin:6px 0}
   .ring .bar{transition:none}
 }
 @media (max-width:520px){ .mon{grid-template-columns:1fr} }
+
+/* Panel de control */
+.fab{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:900;display:flex;align-items:center;gap:8px;white-space:nowrap;
+  background:var(--ink);color:var(--panel);border-color:var(--ink);border-radius:99px;padding:10px 18px;box-shadow:0 8px 24px rgba(10,20,40,.3)}
+.fab:hover{border-color:var(--ink);filter:brightness(1.15)}
+.fab .fab-n{background:var(--err);color:#fff;border-radius:99px;font-size:.75rem;padding:0 7px;line-height:1.5}
+#panelDlg{width:min(1000px,calc(100vw - 32px));padding:0}
+#panelDlg .pc-top{position:sticky;top:0;z-index:2;background:var(--panel);border-bottom:1px solid var(--line);padding:16px 22px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+#panelDlg .pc-top h2{margin:0}
+#panelDlg .pc-body{padding:4px 22px 22px}
+.pc-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:16px}
+.pc-stat{background:var(--bg);border-radius:10px;padding:10px 12px}
+.pc-stat b{display:block;font-family:var(--display);font-size:1.6rem;line-height:1.1;font-variant-numeric:tabular-nums}
+.pc-stat span{font-size:.8rem;color:var(--muted)}
+.pc-stat.mal b{color:var(--err)}
+.pc-aviso{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;border-left:4px solid var(--signal);background:var(--signal-soft);border-radius:8px;padding:8px 12px;margin:8px 0;font-size:.9rem}
+.pc-aviso.mal{border-left-color:var(--err);background:var(--err-soft)}
+.pc-aviso span{min-width:0;word-break:break-word;flex:1 1 280px}
+.pc-page{border:1px solid var(--line);border-left:5px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0}
+.pc-page[data-status="changed"]{border-left-color:var(--changed)}
+.pc-page[data-status="ok"]{border-left-color:var(--ok)}
+.pc-page[data-status="error"]{border-left-color:var(--err)}
+.pc-page .url{font-weight:600;word-break:break-all;color:var(--ink);text-decoration:none}
+.pc-page .url:hover{text-decoration:underline}
+.pc-page .meta{margin:2px 0 6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 8px}
+.chip{display:inline-flex;align-items:center;gap:2px;max-width:100%;font:12px/1.6 var(--mono);background:var(--bg);border:1px solid var(--line);border-radius:99px;padding:1px 4px 1px 10px}
+.chip > span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.chip.aprendido{background:var(--signal-soft)}
+.chip.info{font-family:var(--font)}
+.chip button{border:0;background:none;padding:0 6px;font-size:.78rem;font-weight:600;color:var(--muted);border-radius:99px}
+.chip button:hover{color:var(--ink);background:var(--line)}
+.chip button.quitar:hover{color:var(--err)}
+.pc-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.pc-tools input{flex:1 1 220px;width:auto}
+.pc-tools select{width:auto}
+@media (max-width:520px){ .fab{bottom:10px;padding:8px 14px;font-size:.9rem} #panelDlg .pc-top,#panelDlg .pc-body{padding-left:14px;padding-right:14px} }
 </style>
 </head>
 <body>
@@ -206,6 +243,7 @@ ol.steps li{margin:6px 0}
     <textarea id="e-keywords" rows="2"></textarea>
     <label for="e-ignore">Ignorar líneas que contengan (una por línea)</label>
     <textarea id="e-ignore" rows="3"></textarea>
+    <p class="hint" id="e-globales" hidden></p>
     <label class="check"><input type="checkbox" id="e-random"> Ignorar códigos aleatorios</label>
     <div id="e-normasBox" hidden>
       <label>Filtros aprendidos desde los avisos</label>
@@ -243,6 +281,58 @@ ol.steps li{margin:6px 0}
   <div class="actions" style="margin-top:16px;justify-content:flex-end">
     <button type="button" class="small danger" id="h-clear">Borrar historial de esta página</button>
     <button type="button" class="small primary" id="h-close">Cerrar</button>
+  </div>
+</dialog>
+
+<!-- ============ Diálogo: panel de control ============ -->
+<dialog id="panelDlg" aria-labelledby="pc-titulo">
+  <div class="pc-top">
+    <h2 id="pc-titulo">Panel de control</h2>
+    <button type="button" class="small primary" id="pc-close">Cerrar</button>
+  </div>
+  <div class="pc-body">
+    <div class="pc-stats" id="pc-stats"></div>
+
+    <div id="pc-atencionBox">
+      <h3>Necesita atención</h3>
+      <div id="pc-atencion"></div>
+    </div>
+
+    <div class="sub">
+      <h3>Reglas globales <span class="fold-sub">se aplican a todas las páginas</span></h3>
+      <form id="pc-globalForm">
+        <label for="pc-gIgnore">Ignorar líneas que contengan (una por línea)</label>
+        <textarea id="pc-gIgnore" rows="3" placeholder="Cookies&#10;Última actualización:"></textarea>
+        <label for="pc-gNormas">Atributos que nunca se miran (uno por línea: <code>atributo</code> o <code>etiqueta atributo</code>)</label>
+        <textarea id="pc-gNormas" rows="2" placeholder="nonce&#10;link id"></textarea>
+        <p class="hint">Útil en «Todo el código HTML»: <code>nonce</code> deja de mirar ese atributo en todas las etiquetas; <code>link id</code>, solo en <code>&lt;link&gt;</code>.</p>
+        <label class="check"><input type="checkbox" id="pc-gOrden"> No avisar si solo cambia el orden de las líneas o cuántas veces se repiten</label>
+        <div class="actions" style="margin-top:12px">
+          <button type="submit" class="small primary">Guardar reglas globales</button>
+          <span class="hint" id="pc-gEstado" style="margin:0"></span>
+        </div>
+      </form>
+    </div>
+
+    <div class="sub">
+      <h3>Filtros de cada página</h3>
+      <p class="hint" style="margin-top:0">Pulsa × para quitar un filtro, o «→ global» para aplicarlo a todas las páginas. Los amarillos los aprendió Vigía con «No avisar de cambios como este».</p>
+      <div class="pc-tools">
+        <input type="search" id="pc-buscar" placeholder="Buscar página…" aria-label="Buscar página">
+        <select id="pc-orden" aria-label="Ordenar">
+          <option value="lista">Orden de la lista</option>
+          <option value="avisos">Más avisos en 24 h</option>
+          <option value="estado">Con problemas primero</option>
+        </select>
+      </div>
+      <div class="pc-tools">
+        <button type="button" class="small" data-todas="now">Comprobar todas ahora</button>
+        <button type="button" class="small" data-todas="pause">Pausar todas</button>
+        <button type="button" class="small" data-todas="resume">Reanudar todas</button>
+      </div>
+      <div id="pc-pages"></div>
+      <p class="hint ownerOnly hidden">Los filtros que aprendas pulsando los botones de avisos enviados por GitHub Actions se guardan en GitHub y no aparecen aquí.</p>
+    </div>
   </div>
 </dialog>
 
@@ -527,6 +617,8 @@ ol.steps li{margin:6px 0}
   </section>
 </div>
 
+<button type="button" class="fab" id="btnPanel" aria-haspopup="dialog">⚙ Panel de control <span class="fab-n" id="fabN" hidden></span></button>
+
 <script>
 (() => {
   "use strict";
@@ -564,7 +656,9 @@ ol.steps li{margin:6px 0}
     sound: true, repeat: false, system: false, exportSecrets: false, proxyPropio: "",
     quiet: { on: false, desde: "23:00", hasta: "08:00" },
     tg: { on: false, token: "", chat: "" },
-    ntfy: { on: false, server: "https://ntfy.sh", topic: "", token: "" }
+    ntfy: { on: false, server: "https://ntfy.sh", topic: "", token: "" },
+    // Reglas que se aplican a todas las páginas (Panel de control).
+    global: { ignore: "", normas: [], orden: false }
   };
   let state = { monitors: [], log: [], settings: {} };
   try {
@@ -575,7 +669,8 @@ ol.steps li{margin:6px 0}
   state.settings = Object.assign({}, DEF_SETTINGS, ss, {
     quiet: Object.assign({}, DEF_SETTINGS.quiet, ss.quiet),
     tg: Object.assign({}, DEF_SETTINGS.tg, ss.tg),
-    ntfy: Object.assign({}, DEF_SETTINGS.ntfy, ss.ntfy)
+    ntfy: Object.assign({}, DEF_SETTINGS.ntfy, ss.ntfy),
+    global: Object.assign({}, DEF_SETTINGS.global, ss.global)
   });
   state.monitors.forEach(m => { m.busy = false; if (m.status === "checking") m.status = "idle"; });
 
@@ -798,12 +893,20 @@ ol.steps li{margin:6px 0}
   }
   const lineasDe = txt => String(txt || "").split("\n").map(s => s.trim()).filter(Boolean);
   const reglasIgnorar = m => lineasDe(m.ignore);
+  // Lo que de verdad se aplica a una página: sus reglas más las globales.
+  const GLOBAL = () => state.settings.global;
+  const reglasDe = m => [...new Set([...reglasIgnorar(m), ...lineasDe(GLOBAL().ignore)])];
+  const normasDe = m => {
+    const todas = [...(m.normas || []), ...(GLOBAL().normas || [])].filter(normaValida);
+    return todas.filter((n, i) => todas.findIndex(x => mismaNorma(x, n)) === i);
+  };
+  const ordenDe = m => m.orden === "ignorar" || !!GLOBAL().orden;
   const palabras = m => lineasDe(m.keywords).map(normTxt);
   function filtrar(lines, m) {
-    const reglas = reglasIgnorar(m);
+    const reglas = reglasDe(m);
     const fuera = l => !reglas.some(r => l.includes(r));
     let out = reglas.length ? lines.filter(fuera) : lines;
-    out = aplicarNormas(out, m.normas);
+    out = aplicarNormas(out, normasDe(m));
     if (m.random !== false) out = out.map(limpiarAleatorio);
     // Las reglas aprendidas salen de líneas ya neutralizadas («‹var›», «‹código›»):
     // también hay que buscarlas después, o no coincidirían nunca.
@@ -947,7 +1050,7 @@ ol.steps li{margin:6px 0}
     let items = feed ? leerFeed(raw, m)
       : kind === "enlaces" ? leerEnlaces(raw, m)
       : filtrar(extract(raw, m), m).map(l => ({ key: "t:" + hash(l), text: l }));
-    const reglas = reglasIgnorar(m);
+    const reglas = reglasDe(m);
     if (reglas.length) items = items.filter(i => !reglas.some(r => i.text.includes(r) || (i.href || "").includes(r)));
     const claves = items.map(i => i.key);
 
@@ -981,7 +1084,7 @@ ol.steps li{margin:6px 0}
   }
 
   // «orden: ignorar»: solo cuenta qué líneas hay, no su orden ni sus repeticiones.
-  const huella = (lines, m) => hash((m.orden === "ignorar" ? [...new Set(lines)].sort() : lines).join("\n"));
+  const huella = (lines, m) => hash((ordenDe(m) ? [...new Set(lines)].sort() : lines).join("\n"));
 
   function revisarCambios(m, raw) {
     const lines = filtrar(extract(raw, m), m);
@@ -1094,13 +1197,13 @@ ol.steps li{margin:6px 0}
       const pares = Math.min(d.added.length, d.removed.length);
       for (let i = 0; i < pares; i++) {
         const n = deducirNorma(d.removed[i], d.added[i]);
-        if (n && !normasNuevas.some(x => mismaNorma(x, n)) && !(m.normas || []).some(x => mismaNorma(x, n))) normasNuevas.push(n);
+        if (n && !normasNuevas.some(x => mismaNorma(x, n)) && !normasDe(m).some(x => mismaNorma(x, n))) normasNuevas.push(n);
       }
     }
     // Una regla que se tragara media página dejaría el aviso ciego: se descarta.
     const base = m.lines || [];
     const seguro = p => p.length >= 15 && (base.length < 4 || base.filter(l => l.includes(p)).length <= Math.max(1, base.length * 0.3));
-    const unicos = normasNuevas.length ? [] : [...new Set(prefijos)].filter(p => seguro(p) && !reglasIgnorar(m).includes(p));
+    const unicos = normasNuevas.length ? [] : [...new Set(prefijos)].filter(p => seguro(p) && !reglasDe(m).includes(p));
     // Sin parejas útiles (líneas que solo aparecen o solo desaparecen): la parte
     // fija de cada línea, como en los avisos de novedades.
     // La línea exacta solo sirve para las que no tienen pareja: las que cambian
@@ -1108,8 +1211,8 @@ ol.steps li{margin:6px 0}
     let suelta = null;
     if (d && !normasNuevas.length && !unicos.length) {
       const pares = Math.min(d.added.length, d.removed.length), txt = text => ({ text }), todos = base.map(txt);
-      const cambian = sugerirNovedades({ nuevos: [...d.added.slice(0, pares), ...d.removed.slice(0, pares)].map(txt), todos, ignore: reglasIgnorar(m), exacta: false });
-      const sueltas = sugerirNovedades({ nuevos: [...d.added.slice(pares), ...d.removed.slice(pares)].map(txt), todos, ignore: reglasIgnorar(m) });
+      const cambian = sugerirNovedades({ nuevos: [...d.added.slice(0, pares), ...d.removed.slice(0, pares)].map(txt), todos, ignore: reglasDe(m), exacta: false });
+      const sueltas = sugerirNovedades({ nuevos: [...d.added.slice(pares), ...d.removed.slice(pares)].map(txt), todos, ignore: reglasDe(m) });
       const todas = [...new Set([...(cambian ? cambian.ignore : []), ...(sueltas ? sueltas.ignore : [])])];
       // Quitar una línea que va y viene deja desparejadas otras repetidas (su
       // «</ul>», por ejemplo) y el siguiente aviso sería +0/−0: se aprende a la
@@ -1119,7 +1222,7 @@ ol.steps li{margin:6px 0}
 
     // La misma propuesta sirve para el botón de aquí y para el de Telegram:
     // pulsar uno deja el otro sin efecto.
-    const soloOrden = d && !d.added.length && !d.removed.length && m.orden !== "ignorar";
+    const soloOrden = d && !d.added.length && !d.removed.length && !ordenDe(m);
     const sug = normasNuevas.length || unicos.length ? nuevaSugerencia(m, { normas: normasNuevas, ignore: normasNuevas.length ? [] : unicos })
       : suelta ? nuevaSugerencia(m, suelta)
       : soloOrden ? nuevaSugerencia(m, { normas: [], ignore: [], orden: true }) : null;
@@ -1223,7 +1326,7 @@ ol.steps li{margin:6px 0}
       : `<li>${esc(recorta(i.text))}</li>`).join("")
       + (items.length > 6 ? `<li class="mas">y ${items.length - 6} más</li>` : "");
     const titulo = items.length === 1 ? `Novedad en ${host(m.url)}` : `${items.length} novedades en ${host(m.url)}`;
-    const f = sugerirNovedades({ nuevos: items, todos, ignore: reglasIgnorar(m) });
+    const f = sugerirNovedades({ nuevos: items, todos, ignore: reglasDe(m) });
     const sug = f ? nuevaSugerencia(m, f) : null;
     toast({
       kind: "changed", sticky: true, title: titulo, url: m.url,
@@ -1649,6 +1752,7 @@ ol.steps li{margin:6px 0}
     if (!state.monitors.length) {
       box.innerHTML = `<div class="empty">Todavía no vigilas ninguna página. Añade una dirección arriba para empezar.</div>`;
       updateBadge();
+      actualizarFab();
       return;
     }
     const esOwner = !!owner;
@@ -1707,14 +1811,20 @@ ol.steps li{margin:6px 0}
     }).join("");
     updateRings();
     updateBadge();
+    actualizarFab();
+    refrescarPanel();
   }
 
   $("#list").addEventListener("click", e => {
     const btn = e.target.closest("button[data-act]");
     if (!btn) return;
     const m = state.monitors.find(x => x.id === btn.closest(".mon").dataset.id);
-    if (!m) return;
-    switch (btn.dataset.act) {
+    if (m) accionPagina(m, btn.dataset.act);
+  });
+
+  // Acciones de una página: las usan la lista y el panel de control.
+  function accionPagina(m, act) {
+    switch (act) {
       case "now": m.unseen = false; check(m); break;
       case "edit": abrirAjustes(m); break;
       case "hist": abrirHistorial(m); break;
@@ -1740,7 +1850,7 @@ ol.steps li{margin:6px 0}
         }
         break;
     }
-  });
+  }
 
   function updateRings() {
     const now = Date.now();
@@ -1850,6 +1960,9 @@ ol.steps li{margin:6px 0}
     $("#e-selector").value = m.selector || "";
     $("#e-proxy").value = m.proxy || "auto";
     $("#e-ignore").value = m.ignore || "";
+    const g = GLOBAL(), nG = lineasDe(g.ignore).length + (g.normas || []).length + (g.orden ? 1 : 0);
+    $("#e-globales").hidden = !nG;
+    $("#e-globales").textContent = nG ? `Además se aplican ${nG} ${nG === 1 ? "regla global" : "reglas globales"} (Panel de control).` : "";
     $("#e-keywords").value = m.keywords || "";
     $("#e-random").checked = m.random !== false;
     pintarNormas(m);
@@ -2074,6 +2187,265 @@ ol.steps li{margin:6px 0}
   };
 
   /* =====================================================================
+     Panel de control: resumen, reglas globales y filtros de cada página
+     ===================================================================== */
+  const DIA = 86400000;
+  const avisos24 = m => (m.hist || []).filter(h => Date.now() - h.t < DIA).length;
+  const RUIDOSA = 5; // avisos en 24 h a partir de los que una página parece ruidosa
+  const ghPendiente = () => !!owner && localStorage.getItem(OWNER_KEY + ":pendiente") === "1";
+  const estadoDe = m => m.paused ? "paused" : m.status || "idle";
+  const direccionCorta = u => { try { const x = new URL(u); return x.host + (x.pathname.length > 1 ? x.pathname : "") + x.search; } catch { return u; } };
+
+  // «nonce» → cualquier etiqueta; «link id» o «<link> id» → solo esa etiqueta.
+  function leerNormasGlobales(txt) {
+    const buenas = [], malas = [];
+    lineasDe(txt).forEach(l => {
+      const p = l.replace(/[<>]/g, " ").trim().split(/\s+/);
+      const n = p.length === 1 ? { tag: "*", attr: p[0].toLowerCase() } : { tag: p[0].toLowerCase(), attr: (p[1] || "").toLowerCase() };
+      if (p.length <= 2 && normaValida(n)) { if (!buenas.some(x => mismaNorma(x, n))) buenas.push(n); }
+      else malas.push(l);
+    });
+    return { buenas, malas };
+  }
+  const escribirNorma = n => n.tag === "*" ? n.attr : `${n.tag} ${n.attr}`;
+
+  // Cambiar filtros obliga a tomar referencia nueva, o avisaría de la diferencia.
+  function filtrosCambiados(ms) {
+    ms.forEach(m => { m.rebase = true; marcarGhPendiente(m); });
+    save(); renderList();
+  }
+
+  function atencion() {
+    const out = [];
+    state.monitors.forEach(m => {
+      if (m.paused) return;
+      if (m.status === "error") out.push({ mal: true, m, texto: `No se puede comprobar ${direccionCorta(m.url)}: ${m.message || "error"}`, boton: ["edit", "Ajustes"] });
+      const n = avisos24(m);
+      if (n >= RUIDOSA) out.push({ m, texto: `${direccionCorta(m.url)} ha avisado ${n} veces en 24 horas. Si son falsos positivos, revisa sus filtros o pulsa «No avisar de cambios como este» en el próximo aviso.`, boton: ["ver", "Ver filtros"] });
+      if (m.feedUrl && !m.isFeed && m.watch !== "numero") out.push({ m, texto: `${direccionCorta(m.url)} publica un feed RSS, más fiable que vigilar la página.`, boton: ["feed", "Vigilar el feed"] });
+    });
+    if (ghPendiente()) out.push({ texto: "Hay cambios sin enviar a GitHub: GitHub Actions sigue usando la lista anterior.", boton: ["gh", "Enviar lista a GitHub"] });
+    const movil = (S.tg.on && S.tg.token && S.tg.chat) || (S.ntfy.on && S.ntfy.topic);
+    if (!movil && state.monitors.some(m => m.movil !== false)) out.push({ texto: "Los avisos no llegan al móvil: no hay Telegram ni ntfy configurado.", boton: ["movil", "Configurar"] });
+    return out;
+  }
+
+  function actualizarFab() {
+    const n = state.monitors.filter(m => !m.paused && m.status === "error").length;
+    const el = $("#fabN");
+    el.hidden = !n;
+    el.textContent = n;
+    $("#btnPanel").title = n ? `${n} ${n === 1 ? "página con errores" : "páginas con errores"}` : "";
+  }
+
+  function chip(texto, { clase = "", quitar, global, titulo } = {}) {
+    return `<span class="chip ${clase}" title="${esc(titulo || texto)}"><span>${esc(texto)}</span>` +
+      (global ? `<button type="button" data-global="${esc(global)}" title="Aplicar a todas las páginas">→ global</button>` : "") +
+      (quitar ? `<button type="button" class="quitar" data-quitar="${esc(quitar)}" aria-label="Quitar ${esc(texto)}">×</button>` : "") + `</span>`;
+  }
+
+  function chipsDe(m) {
+    const c = [], g = GLOBAL(), YA = " · ya global";
+    reglasIgnorar(m).forEach((r, i) => {
+      const ya = lineasDe(g.ignore).includes(r);
+      c.push(chip(`Ignora: ${r}${ya ? YA : ""}`, { quitar: `ignore:${i}`, global: ya ? null : `ignore:${i}`, titulo: `Ignora las líneas que contengan: ${r}` }));
+    });
+    (m.normas || []).filter(normaValida).forEach((n, i) => {
+      const ya = (g.normas || []).some(x => mismaNorma(x, n));
+      c.push(chip(`No mira ${n.attr} de ${n.tag === "*" ? "ninguna etiqueta" : `<${n.tag}>`}${ya ? YA : ""}`, { clase: "aprendido", quitar: `norma:${i}`, global: ya ? null : `norma:${i}` }));
+    });
+    if (m.orden === "ignorar") c.push(chip(`No avisa si solo cambia el orden${g.orden ? YA : ""}`, { clase: "aprendido", quitar: "orden", global: g.orden ? null : "orden" }));
+    lineasDe(m.keywords).forEach((k, i) => c.push(chip(`Solo si contiene: ${k}`, { clase: "info", quitar: `kw:${i}` })));
+    if (m.selector) c.push(chip(`Zona: ${m.selector}`, { clase: "info" }));
+    if (m.hDesde && m.hHasta) c.push(chip(`De ${m.hDesde} a ${m.hHasta}${m.laborables ? ", lun-vie" : ""}`, { clase: "info" }));
+    else if (m.laborables) c.push(chip("Lunes a viernes", { clase: "info" }));
+    if (m.random === false) c.push(chip("Mira también los códigos aleatorios", { clase: "info" }));
+    return c.length ? c.join("") : `<span class="hint" style="margin:0">Sin filtros propios.</span>`;
+  }
+
+  function renderPanel() {
+    const ms = state.monitors;
+    const activas = ms.filter(m => !m.paused).length;
+    const errores = ms.filter(m => !m.paused && m.status === "error").length;
+    const hoy = ms.reduce((a, m) => a + avisos24(m), 0);
+    const canales = [S.tg.on && S.tg.token && S.tg.chat && "Telegram", S.ntfy.on && S.ntfy.topic && "ntfy"].filter(Boolean);
+    const nube = ms.filter(m => m.cloud).length;
+    const stat = (v, t, mal) => `<div class="pc-stat${mal ? " mal" : ""}"><b>${esc(v)}</b><span>${esc(t)}</span></div>`;
+    $("#pc-stats").innerHTML = [
+      stat(ms.length, `${ms.length === 1 ? "página" : "páginas"} (${activas} ${activas === 1 ? "activa" : "activas"})`),
+      stat(errores, "con errores", errores > 0),
+      stat(hoy, "avisos en 24 horas"),
+      stat(canales.length ? canales.join(" + ") : "—", "avisos al móvil", !canales.length),
+      owner ? stat(nube, `en GitHub${ghPendiente() ? ", sin enviar" : ""}`, ghPendiente()) : ""
+    ].join("");
+
+    const at = atencion();
+    $("#pc-atencionBox").hidden = !at.length;
+    $("#pc-atencion").innerHTML = at.map((a, i) => `<div class="pc-aviso${a.mal ? " mal" : ""}"><span>${esc(a.texto)}</span>` +
+      `<button type="button" class="small" data-aviso="${i}">${esc(a.boton[1])}</button></div>`).join("");
+    renderPanel.avisos = at;
+
+    const g = GLOBAL();
+    if (document.activeElement === null || !$("#pc-globalForm").contains(document.activeElement)) {
+      $("#pc-gIgnore").value = g.ignore || "";
+      $("#pc-gNormas").value = (g.normas || []).map(escribirNorma).join("\n");
+      $("#pc-gOrden").checked = !!g.orden;
+    }
+    const nG = lineasDe(g.ignore).length + (g.normas || []).length + (g.orden ? 1 : 0);
+    $("#pc-gEstado").textContent = nG ? `${nG} ${nG === 1 ? "regla global activa" : "reglas globales activas"}.` : "Sin reglas globales.";
+
+    renderPaginasPanel();
+  }
+
+  function renderPaginasPanel() {
+    const q = normTxt($("#pc-buscar").value.trim());
+    let ms = state.monitors.filter(m => !q || normTxt(m.url).includes(q));
+    const orden = $("#pc-orden").value;
+    const peso = m => m.paused ? 0 : m.status === "error" ? 3 : m.status === "changed" ? 2 : 1;
+    if (orden === "avisos") ms = [...ms].sort((a, b) => avisos24(b) - avisos24(a));
+    if (orden === "estado") ms = [...ms].sort((a, b) => peso(b) - peso(a) || avisos24(b) - avisos24(a));
+    $("#pc-pages").innerHTML = ms.length ? ms.map(m => {
+      const w = m.watch || "cambios";
+      const datos = [m.isFeed ? "feed RSS" : WATCH_TXT[w], (w === "nuevo" || w === "cambios") && !m.isFeed ? (m.mode === "html" ? "HTML" : "texto") : "",
+        `cada ${fmtDur(m.interval)}`, `${avisos24(m)} ${avisos24(m) === 1 ? "aviso" : "avisos"} en 24 h`, m.paused ? "en pausa" : "",
+        owner && m.cloud ? "GitHub" : ""].filter(Boolean);
+      return `<div class="pc-page" data-id="${esc(m.id)}" data-status="${estadoDe(m)}">
+        <a class="url" href="${esc(m.url)}" target="_blank" rel="noopener">${esc(direccionCorta(m.url))}</a>
+        <div class="meta">${esc(datos.join(" · "))}${m.status === "error" && !m.paused ? ` · <span class="err-txt">${esc(recorta(m.message || "error", 90))}</span>` : ""}</div>
+        <div class="chips">${chipsDe(m)}</div>
+        <div class="actions">
+          <button type="button" class="small" data-act="edit">Ajustes</button>
+          <button type="button" class="small" data-act="hist">Historial${m.hist && m.hist.length ? ` (${m.hist.length})` : ""}</button>
+          <button type="button" class="small" data-act="now" ${m.busy ? "disabled" : ""}>Comprobar ahora</button>
+          <button type="button" class="small" data-act="pause">${m.paused ? "Reanudar" : "Pausar"}</button>
+        </div>
+      </div>`;
+    }).join("") : `<p class="hint">${state.monitors.length ? "Ninguna página coincide con la búsqueda." : "Todavía no vigilas ninguna página."}</p>`;
+  }
+
+  // Con el panel abierto, cada comprobación lo actualiza (una vez por fotograma),
+  // conservando el botón que tuviera el foco.
+  let panelPendiente = false;
+  function refrescarPanel() {
+    if (panelPendiente || !$("#panelDlg").open) return;
+    panelPendiente = true;
+    requestAnimationFrame(() => {
+      panelPendiente = false;
+      const f = document.activeElement, tarjeta = f && f.closest && f.closest(".pc-page");
+      const clave = tarjeta && f.tagName === "BUTTON"
+        ? `.pc-page[data-id="${tarjeta.dataset.id}"] button${["act", "quitar", "global"].map(k => f.dataset[k] ? `[data-${k}="${f.dataset[k]}"]` : "").join("")}` : null;
+      renderPanel();
+      if (clave) { const el = document.querySelector(clave); if (el) el.focus(); }
+    });
+  }
+
+  function abrirPanel() {
+    renderPanel();
+    if (!$("#panelDlg").open) $("#panelDlg").showModal();
+  }
+  const panelAbierto = () => $("#panelDlg").open;
+  $("#btnPanel").onclick = abrirPanel;
+  $("#pc-close").onclick = () => $("#panelDlg").close();
+  $("#pc-buscar").addEventListener("input", renderPaginasPanel);
+  $("#pc-orden").addEventListener("change", renderPaginasPanel);
+  // Al volver de Ajustes o del historial, el panel refleja lo que se cambió.
+  ["#editDlg", "#histDlg"].forEach(sel => $(sel).addEventListener("close", () => { if (panelAbierto()) renderPanel(); }));
+
+  $("#pc-globalForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const { buenas, malas } = leerNormasGlobales($("#pc-gNormas").value);
+    if (malas.length) {
+      toast({ kind: "error", title: "Atributo no válido", body: `Revisa: ${malas.map(l => `«${recorta(l, 40)}»`).join(", ")}. Escribe «atributo» o «etiqueta atributo».` });
+      return;
+    }
+    const nuevo = { ignore: lineasDe($("#pc-gIgnore").value).join("\n"), normas: buenas, orden: $("#pc-gOrden").checked };
+    const g = GLOBAL();
+    if (JSON.stringify(nuevo) === JSON.stringify({ ignore: lineasDe(g.ignore).join("\n"), normas: g.normas || [], orden: !!g.orden })) {
+      toast({ title: "Sin cambios", body: "Las reglas globales ya eran esas." });
+      return;
+    }
+    state.settings.global = nuevo;
+    filtrosCambiados(state.monitors);
+    renderPanel();
+    toast({ title: "Reglas globales guardadas", body: `Se aplican a las ${state.monitors.length} páginas. Cada una tomará una referencia nueva sin avisar.` });
+  });
+
+  // Pasa un filtro de una página a las reglas globales y lo quita de todas las
+  // páginas que lo tenían, porque ya sobra.
+  function hacerGlobal(m, que) {
+    const [tipo, i] = que.split(":");
+    const g = GLOBAL();
+    let texto;
+    if (tipo === "ignore") {
+      const r = reglasIgnorar(m)[Number(i)];
+      if (!r) return;
+      g.ignore = [...new Set([...lineasDe(g.ignore), r])].join("\n");
+      state.monitors.forEach(x => { x.ignore = reglasIgnorar(x).filter(l => l !== r).join("\n"); });
+      texto = `Todas las páginas ignorarán las líneas que contengan «${recorta(r, 60)}».`;
+    } else if (tipo === "norma") {
+      const n = (m.normas || []).filter(normaValida)[Number(i)];
+      if (!n) return;
+      g.normas = [...(g.normas || []).filter(x => !mismaNorma(x, n)), n];
+      state.monitors.forEach(x => { x.normas = (x.normas || []).filter(y => !mismaNorma(y, n)); });
+      texto = `Ninguna página mirará ${describeNorma(n)}.`;
+    } else if (tipo === "orden") {
+      g.orden = true;
+      state.monitors.forEach(x => { delete x.orden; });
+      texto = "Ninguna página avisará si solo cambia el orden de las líneas.";
+    } else return;
+    filtrosCambiados(state.monitors);
+    renderPanel();
+    toast({ title: "Regla global añadida", body: texto });
+  }
+
+  function quitarFiltroPagina(m, que) {
+    const [tipo, i] = que.split(":");
+    if (tipo === "ignore") m.ignore = reglasIgnorar(m).filter((_, j) => j !== Number(i)).join("\n");
+    else if (tipo === "norma") { const buenas = (m.normas || []).filter(normaValida); buenas.splice(Number(i), 1); m.normas = buenas; }
+    else if (tipo === "orden") delete m.orden;
+    else if (tipo === "kw") m.keywords = lineasDe(m.keywords).filter((_, j) => j !== Number(i)).join("\n");
+    else return;
+    filtrosCambiados([m]);
+    renderPanel();
+  }
+
+  $("#panelDlg").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    const tarjeta = b.closest(".pc-page");
+    const m = tarjeta && state.monitors.find(x => x.id === tarjeta.dataset.id);
+    if (m && b.dataset.act) {
+      accionPagina(m, b.dataset.act);
+      if (b.dataset.act !== "edit" && b.dataset.act !== "hist") renderPanel();
+    } else if (m && b.dataset.quitar) quitarFiltroPagina(m, b.dataset.quitar);
+    else if (m && b.dataset.global) hacerGlobal(m, b.dataset.global);
+    else if (b.dataset.todas) {
+      const t = b.dataset.todas;
+      state.monitors.forEach(x => {
+        if (t === "now" && !x.paused) { x.unseen = false; check(x); }
+        if (t === "pause") x.paused = true;
+        if (t === "resume" && x.paused) { x.paused = false; x.nextAt = Date.now() + Math.random() * 3000; }
+      });
+      save(); renderList(); renderPanel();
+    } else if (b.dataset.aviso != null) {
+      const a = (renderPanel.avisos || [])[Number(b.dataset.aviso)];
+      if (!a) return;
+      const [act] = a.boton;
+      if (act === "ver") {
+        $("#pc-buscar").value = "";
+        renderPaginasPanel();
+        const el = document.querySelector(`.pc-page[data-id="${a.m.id}"]`);
+        if (el) { el.scrollIntoView({ block: "center" }); el.querySelector("button")?.focus(); }
+      } else if (act === "gh") { $("#ghSync").click(); setTimeout(() => panelAbierto() && renderPanel(), 2500); }
+      else if (act === "movil") {
+        $("#panelDlg").close();
+        $("#foldMovil").open = true;
+        $("#foldMovil").scrollIntoView({ block: "start" });
+      } else { accionPagina(a.m, act); if (act !== "edit") renderPanel(); }
+    }
+  });
+
+  /* =====================================================================
      Exportar e importar
      ===================================================================== */
   const CAMPOS_CONFIG = ["id", "url", "interval", "watch", "mode", "selector", "proxy", "ignore", "keywords", "random",
@@ -2081,7 +2453,7 @@ ol.steps li{margin:6px 0}
   const pick = (o, campos) => Object.fromEntries(campos.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 
   $("#btnExport").onclick = () => {
-    const settings = pick(S, ["sound", "repeat", "system", "quiet", "proxyPropio"]);
+    const settings = pick(S, ["sound", "repeat", "system", "quiet", "proxyPropio", "global"]);
     if (S.exportSecrets) { settings.tg = S.tg; settings.ntfy = S.ntfy; }
     else settings.ntfy = { server: S.ntfy.server };
     const data = { app: "vigia", version: 1, exportado: new Date().toISOString(),
@@ -2117,6 +2489,11 @@ ol.steps li{margin:6px 0}
         const d = data.settings;
         ["sound", "repeat", "proxyPropio"].forEach(k => { if (d[k] !== undefined) S[k] = d[k]; });
         if (d.quiet) Object.assign(S.quiet, d.quiet);
+        if (d.global) {
+          S.global = Object.assign({ ignore: "", normas: [], orden: false }, d.global);
+          S.global.normas = (S.global.normas || []).filter(normaValida);
+          state.monitors.forEach(m => { m.rebase = true; });
+        }
         if (d.tg && d.tg.token) Object.assign(S.tg, d.tg);
         if (d.ntfy) Object.assign(S.ntfy, d.ntfy);
       }
@@ -2272,9 +2649,11 @@ ol.steps li{margin:6px 0}
 
   $("#ghSync").onclick = e => conBoton(e.target, async () => {
     const zona = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    // Las reglas globales viajan ya sumadas a las de cada página.
     const monitors = state.monitors.filter(m => m.cloud && !m.paused).map(m => Object.assign(
-      pick(m, ["id", "url", "interval", "watch", "mode", "selector", "ignore", "keywords", "random", "numCond", "numValor", "hDesde", "hHasta", "laborables", "normas", "orden"]),
-      { zona }));
+      pick(m, ["id", "url", "interval", "watch", "mode", "selector", "keywords", "random", "numCond", "numValor", "hDesde", "hHasta", "laborables"]),
+      { ignore: reglasDe(m).join("\n"), normas: normasDe(m), zona },
+      ordenDe(m) ? { orden: "ignorar" } : {}));
     const valor = JSON.stringify({ version: 1, actualizado: new Date().toISOString(), monitors });
     const LIMITE = 47000; // GitHub admite 48 KB por variable
     if (valor.length > LIMITE) { toast({ kind: "error", title: "Lista demasiado grande", body: "GitHub admite hasta 48 KB por variable. Reduce filtros o páginas." }); return; }
