@@ -387,7 +387,7 @@ async function atenderBoton(q, monitors, estado) {
 function vista(m, st = {}) {
   return {
     id: m.id, url: m.url, watch: m.watch || "cambios", mode: m.mode || "text",
-    interval: Number(m.interval) || 300, paused: !!m.paused, cloud: true,
+    interval: Number(m.interval) || 300, paused: !!m.paused, cloud: m.cloud !== false,
     ignore: [...new Set([...lineasDe(m.ignore), ...(st.ignorarBot || [])])],
     normas: [...(m.normas || []).filter(normaValida), ...(st.normasBot || [])],
     orden: m.orden === "ignorar" || !!st.ordenBot,
@@ -413,14 +413,19 @@ function ctxBot(bot) {
     async cambiar(id, c) {
       const m = cfg.monitors.find(x => x.id === id);
       if (!m) return;
-      if (c.interval != null) m.interval = Math.max(300, Number(c.interval) || 300);
+      let nota = "✅ Guardado. La web lo recibirá al abrirse.";
+      if (c.interval != null) {
+        const pedido = Number(c.interval) || 300, minimo = m.cloud === false ? 10 : 300;
+        m.interval = Math.max(minimo, pedido);
+        if (pedido < minimo) nota = "✅ Guardado cada 5 min: GitHub Actions no baja de ahí.";
+      }
       if (c.paused != null) { m.paused = !!c.paused; if (!m.paused && estado[id]) estado[id].last = 0; }
       if (c.ignore) m.ignore = c.ignore.join("\n");
       if (c.normas) m.normas = c.normas;
       if (c.orden != null) { if (c.orden) m.orden = "ignorar"; else delete m.orden; }
       if (c.keywords) m.keywords = c.keywords.join("\n");
       editada(m);
-      return { nota: "✅ Guardado. La web lo recibirá al abrirse." };
+      return { nota };
     },
     async cambiarGlobal(c) {
       const g = cfg.global;
@@ -434,7 +439,7 @@ function ctxBot(bot) {
     async nueva({ url, watch }) {
       try { url = new URL(url).href; } catch { return { error: "Esa dirección no es válida." }; }
       if (cfg.monitors.some(m => m.url === url && (m.watch || "cambios") === watch)) return { error: "Esa página ya está en la lista." };
-      const m = { id: Math.random().toString(36).slice(2, 10), url, watch, mode: "text", interval: 900, random: true, creado: Date.now() };
+      const m = { id: Math.random().toString(36).slice(2, 10), url, watch, mode: "text", interval: 900, random: true, cloud: true, creado: Date.now() };
       cfg.monitors.push(m);
       editada(m);
       return { id: m.id, nota: "✅ Añadida: tomaré su referencia en esta misma ejecución." };
@@ -541,6 +546,12 @@ if (process.env.VIGIA_GH_TOKEN && API_VAR) {
     anotar(`VIGIA_GH_TOKEN no funciona: ${motivoSoloLectura}`);
   }
 }
+if (!process.env.VIGIA_GH_TOKEN && cfg.monitors?.length) {
+  anotar("Tu lista de páginas aparece en el registro de cada ejecución (GitHub muestra las variables de entorno, y en un repositorio público el registro lo ve cualquiera). Crea el secreto `VIGIA_GH_TOKEN` (ver README): con él la lista se lee por la API y deja de aparecer.");
+}
+if (process.env.VIGIA_GH_TOKEN && !puedeGuardar && !cfg.monitors?.length) {
+  anotar("Sin lista de páginas: con `VIGIA_GH_TOKEN` la lista se lee por la API, y el token no funciona. Revisa sus permisos.");
+}
 cfg.monitors = Array.isArray(cfg.monitors) ? cfg.monitors : [];
 cfg.global = { ignore: "", normas: [], orden: false, ...(cfg.global || {}) };
 
@@ -566,6 +577,7 @@ for (const r of await atenderTelegram(estado)) resumen.push(["Telegram", r]);
 const monitors = cfg.monitors;
 for (const [idx, m] of monitors.entries()) {
   const st = (estado[m.id] ||= {});
+  if (m.cloud === false) { resumen.push([`Página ${idx + 1}`, "solo en el navegador"]); continue; }
   if (m.paused) { resumen.push([`Página ${idx + 1}`, "en pausa"]); continue; }
   const intervalo = Math.max(60, Number(m.interval) || 300) * 1000;
   if (st.last && Date.now() - st.last < intervalo - TOLERANCIA_MS) { resumen.push([`Página ${idx + 1}`, "aún no toca"]); continue; }

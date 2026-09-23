@@ -204,18 +204,26 @@ Actions, y cada menú te dice quién te está respondiendo.
   que cambies en páginas de GitHub se envía solo a GitHub si has entrado como
   propietario (`#propietario`).
 - **🟠 Web cerrada**: responde GitHub Actions cuando se ejecuta, así que puede
-  tardar (GitHub no respeta los 5 minutos: a veces pasan horas). Solo ve las
-  páginas de GitHub. Para poder cambiar cosas, necesita el secreto
-  `VIGIA_GH_TOKEN`; sin él, el bot funciona en **solo lectura** 🔒.
+  tardar (GitHub no respeta los 5 minutos: a veces pasan horas). Ve todas las
+  páginas que la web le envió, aunque solo comprueba las de GitHub (☁️). Para
+  poder cambiar cosas, necesita el secreto `VIGIA_GH_TOKEN`; sin él, el bot
+  funciona en **solo lectura** 🔒.
+
+Si tienes la misma dirección con dos configuraciones, el bot las distingue
+añadiendo lo que cambia («· Cualquier cambio · HTML», «· texto»…). En **⏱
+Frecuencia** hay tiempos fijos y **✏️ Personalizada**, donde escribes `90 s`,
+`10 min`, `2 h` o `1 día` (en páginas de GitHub, como mínimo 5 minutos).
 
 GitHub Actions espera 90 segundos antes de responder a algo, por si la web está
 abierta y lo atiende antes.
 
 ### Que lo cambiado en el bot llegue a la web
 
-La lista de páginas de GitHub (`VIGIA_CONFIG`) es la lista compartida. Cada
-página lleva la fecha de su último cambio y, al sincronizar, gana lo más
-reciente de cada una, así que la web y el bot no se pisan:
+La lista `VIGIA_CONFIG` es la lista compartida: con la web conectada como
+propietario, lleva todas tus páginas (las de GitHub y las del navegador, cada
+una marcada) y se actualiza sola al poco de cualquier cambio. Cada página lleva
+la fecha de su último cambio y, al sincronizar, gana lo más reciente de cada
+una, así que la web y el bot no se pisan:
 
 - Lo que cambies en el bot con la **web abierta** ya está en la web (y se envía
   a GitHub).
@@ -228,6 +236,12 @@ Para que GitHub Actions pueda guardar, crea el secreto **`VIGIA_GH_TOKEN`** con
 un token *fine-grained* de este repositorio con **Variables: Read and write**.
 Puedes usar el mismo que usas para entrar como propietario. Si le falta el
 permiso, el resumen de la ejecución lo dice.
+
+`VIGIA_GH_TOKEN` además protege tu privacidad: GitHub escribe en el registro de
+cada ejecución las variables de entorno del paso, y en un repositorio público
+ese registro lo ve cualquiera. Sin el token, la lista (con tus direcciones) se
+le pasa al workflow así y aparece en el registro; con el token, el workflow la
+lee por la API y no aparece.
 
 ## Proxy propio (opcional)
 

@@ -1848,7 +1848,7 @@ ol.steps li{margin:6px 0}
         if (confirm(`¿Dejar de vigilar ${m.url}?`)) {
           state.monitors = state.monitors.filter(x => x !== m);
           marcarGhPendiente(m);
-          if (m.cloud) anotarBorradoGh(m);
+          anotarBorradoGh(m);
           save(); renderList();
         }
         break;
@@ -2012,7 +2012,6 @@ ol.steps li{margin:6px 0}
       return;
     }
     const cambiaAcceso = m.proxy !== $("#e-proxy").value;
-    const antesCloud = !!m.cloud;
     Object.assign(m, {
       interval: iv,
       watch: $("#e-watch").value,
@@ -2035,7 +2034,7 @@ ol.steps li{margin:6px 0}
     if (m.status === "changed") m.status = "ok";
     m.nextAt = Date.now();
     editando = null;
-    marcarGhPendiente(m, antesCloud);
+    marcarGhPendiente(m);
     save(); renderList();
     toast({ title: "Ajustes guardados", url: m.url, body: "Se tomará una nueva referencia ahora." });
   });
@@ -2202,7 +2201,7 @@ ol.steps li{margin:6px 0}
   });
 
   function ctxBotWeb() {
-    const nota = m => m.cloud && owner ? "✅ Guardado y enviado a GitHub" : m.cloud ? "✅ Guardado en la web (sin conexión a GitHub)" : "✅ Guardado";
+    const nota = () => owner ? "✅ Guardado y enviado a GitHub" : "✅ Guardado en la web (sin conexión a GitHub)";
     return {
       chat: S.tg.chat,
       ahora: () => Date.now(),
@@ -2225,8 +2224,10 @@ ol.steps li{margin:6px 0}
         if (filtros) m.rebase = true;
         marcarGhPendiente(m);
         save(); renderList();
-        if (m.cloud) programarEnvioGh();
-        return { nota: nota(m) };
+        programarEnvioGh();
+        const r = { nota: nota(m) };
+        if (c.interval != null && m.cloud && m.interval < 300) r.nota += ". En GitHub, como mucho cada 5 min";
+        return r;
       },
       async cambiarGlobal(c) {
         const g = GLOBAL();
@@ -2250,7 +2251,7 @@ ol.steps li{margin:6px 0}
         marcarGhPendiente(m);
         save(); renderList();
         check(m);
-        if (m.cloud) programarEnvioGh();
+        programarEnvioGh();
         addLog(m, "info", "Añadida desde Telegram");
         return { id: m.id, nota: m.cloud ? "✅ Añadida en la web y en GitHub" : "✅ Añadida en la web" };
       },
@@ -2258,7 +2259,8 @@ ol.steps li{margin:6px 0}
         const m = state.monitors.find(x => x.id === id);
         if (!m) return;
         state.monitors = state.monitors.filter(x => x !== m);
-        if (m.cloud) { anotarBorradoGh(m); programarEnvioGh(); }
+        anotarBorradoGh(m);
+        programarEnvioGh();
         save(); renderList();
       },
       async ejecutar() {
@@ -2305,7 +2307,7 @@ ol.steps li{margin:6px 0}
         if (borradosLocal.has(c.id) && borradosLocal.get(c.id) >= (c.editado || 0)) continue;
         if (!c.editado) continue; // listas antiguas: sin fecha no se sabe si es nueva o la borraste aquí
         const nueva = Object.assign({ id: c.id, mode: "text", proxy: "auto", random: true, movil: true, selector: "", ignore: "", keywords: "" },
-          pick(c, CAMPOS_GH), { cloud: true, editado: c.editado, normVersion: NORM_VERSION, changes: 0, status: "idle", message: "", nextAt: Date.now() + n * 1500, createdAt: Date.now() });
+          pick(c, CAMPOS_GH), { cloud: c.cloud !== false, editado: c.editado, normVersion: NORM_VERSION, changes: 0, status: "idle", message: "", nextAt: Date.now() + n * 1500, createdAt: Date.now() });
         nueva.interval = Math.max(10, Number(nueva.interval) || 900);
         state.monitors.push(nueva);
         n++;
@@ -2313,13 +2315,13 @@ ol.steps li{margin:6px 0}
       }
       if ((c.editado || 0) <= (m.editado || 0)) continue;
       CAMPOS_GH.forEach(k => { if (c[k] === undefined) delete m[k]; else m[k] = c[k]; });
-      Object.assign(m, { cloud: true, editado: c.editado, rebase: true });
+      Object.assign(m, { cloud: c.cloud !== false, editado: c.editado, rebase: true });
       if (!m.paused && (m.nextAt || 0) > Date.now() + m.interval * 1000) m.nextAt = Date.now();
       n++;
     }
     for (const b of cfg.borrados || []) {
       const m = state.monitors.find(x => x.id === b.id);
-      if (m && m.cloud && (m.editado || 0) <= b.t) { state.monitors = state.monitors.filter(x => x !== m); n++; }
+      if (m && (m.editado || 0) <= b.t) { state.monitors = state.monitors.filter(x => x !== m); n++; }
     }
     const g = cfg.global;
     if (g && (g.editado || 0) > (GLOBAL().editado || 0)) {
@@ -2351,9 +2353,11 @@ ol.steps li{margin:6px 0}
     return {
       version: 2, actualizado: new Date().toISOString(),
       global: { ignore: lineasDe(g.ignore).join("\n"), normas: (g.normas || []).filter(normaValida), orden: !!g.orden, editado: g.editado || 0 },
-      monitors: state.monitors.filter(m => m.cloud).map(m => Object.assign(
+      // Van todas, para que el bot las vea con la web cerrada; GitHub Actions
+      // solo comprueba las que tienen «cloud».
+      monitors: state.monitors.map(m => Object.assign(
         pick(m, ["id", "url", "interval", "watch", "mode", "selector", "keywords", "random", "numCond", "numValor", "hDesde", "hHasta", "laborables", "orden"]),
-        { ignore: reglasIgnorar(m).join("\n"), normas: (m.normas || []).filter(normaValida), paused: !!m.paused, editado: m.editado || 0, zona })),
+        { ignore: reglasIgnorar(m).join("\n"), normas: (m.normas || []).filter(normaValida), paused: !!m.paused, cloud: !!m.cloud, editado: m.editado || 0, zona })),
       borrados: state.borradosGh || []
     };
   }
@@ -2365,15 +2369,17 @@ ol.steps li{margin:6px 0}
     try { remoto = await leerConfigGh(); aplicarConfigGh(remoto); } catch (err) { if (err.status !== 404) throw err; }
     const local = configLocalGh();
     const final = core ? core.fusionarConfigs(remoto, local) : local;
-    final.monitors = final.monitors.filter(c => state.monitors.some(m => m.id === c.id && m.cloud));
+    final.monitors = final.monitors.filter(c => state.monitors.some(m => m.id === c.id));
     const valor = JSON.stringify(final);
     const LIMITE = 47000; // GitHub admite 48 KB por variable
     if (valor.length > LIMITE) throw Object.assign(new Error("GitHub admite hasta 48 KB por variable. Reduce filtros o páginas."), { grande: true });
     await ponerVariable("VIGIA_CONFIG", valor);
-    await ponerVariable("VIGIA_ACTIVO", final.monitors.length ? "true" : "false");
+    // Sin páginas de GitHub el workflow sigue haciendo falta si hay bot: lo atiende con la web cerrada.
+    const enNube = final.monitors.filter(c => c.cloud !== false).length;
+    await ponerVariable("VIGIA_ACTIVO", enNube || (S.tg.on && S.tg.token && final.monitors.length) ? "true" : "false");
     localStorage.removeItem(OWNER_KEY + ":pendiente");
     save(); renderList(); pintarPendiente();
-    return { n: final.monitors.length, ocupacion: valor.length / LIMITE };
+    return { n: enNube, ocupacion: valor.length / LIMITE };
   }
 
   // Los cambios hechos desde el bot se envían solos (no hay nadie delante para pulsar el botón).
@@ -2809,9 +2815,12 @@ ol.steps li{margin:6px 0}
     }
   });
 
-  function marcarGhPendiente(m, antes = false) {
+  // Toda la lista viaja a GitHub (el bot la lee de ahí con la web cerrada), así
+  // que cualquier cambio en una página se envía solo al poco.
+  function marcarGhPendiente(m) {
     if (m) m.editado = Date.now(); // para saber qué versión es la más reciente al sincronizar
-    if (owner && m && (m.cloud || antes)) {
+    if (owner && m) {
+      programarEnvioGh();
       localStorage.setItem(OWNER_KEY + ":pendiente", "1");
       pintarPendiente();
     }
