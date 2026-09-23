@@ -234,6 +234,15 @@ Actions, y cada menú te dice quién te está respondiendo.
   poder cambiar cosas, necesita el secreto `VIGIA_GH_TOKEN`; sin él, el bot
   funciona en **solo lectura** 🔒.
 
+**Web y GitHub, por separado.** La lista del bot se filtra con **☁️ GitHub**
+(páginas que revisa GitHub Actions, y también la web mientras está abierta) y
+**🖥 Solo web**. Las páginas de GitHub tienen **dos frecuencias**: la de la web
+(**⏱ Web**) y la de GitHub Actions (**⏱ GitHub**), que se cambian por separado;
+si no pones la de GitHub, usa la de la web (nunca menos de 1 minuto). Desde la
+ficha también puedes pasar una página a GitHub o quitarla. En la web, la
+frecuencia de GitHub está en los Ajustes de cada página, bajo «Vigilar también
+desde GitHub Actions».
+
 Si tienes la misma dirección con dos configuraciones, el bot las distingue
 añadiendo lo que cambia («· Cualquier cambio · HTML», «· texto»…). En **⏱
 Frecuencia** hay tiempos fijos y **✏️ Personalizada**, donde escribes `90 s`,

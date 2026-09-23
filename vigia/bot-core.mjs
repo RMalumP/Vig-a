@@ -69,6 +69,8 @@ export function nombre(p, todas = []) {
 const describeNorma = n => `${n.attr} de ${n.tag === "*" ? "cualquier etiqueta" : `<${n.tag}>`}`;
 const emoji = p => p.paused ? "⏸" : p.estado === "error" ? "🔴" : p.estado === "changed" ? "🔵" : p.ultima ? "🟢" : "⚪";
 const lugar = p => p.cloud ? "☁️" : "🖥";
+// GitHub Actions usa su propia frecuencia si la tiene; si no, la de la web (nunca menos de 1 minuto).
+export const cadaGh = p => Math.max(60, Number(p.intervalGh) || Number(p.interval) || 300);
 const boton = (text, data) => ({ text, callback_data: data });
 const filas = (...f) => f.filter(x => x && x.length);
 
@@ -141,9 +143,10 @@ function inicio(ctx) {
   const ps = ctx.paginas(), ahora = ctx.ahora();
   const activas = ps.filter(p => !p.paused).length, errores = ps.filter(p => !p.paused && p.estado === "error").length;
   const avisos = ps.reduce((a, p) => a + (p.hist || []).filter(h => ahora - h.t < 86400000).length, 0);
+  const nGh = ps.filter(p => p.cloud).length;
   const texto = `<b>🛰️ Vigía</b>\n${indicador(ctx)}\n\n` +
-    `${ps.length} ${ps.length === 1 ? "página" : "páginas"} · ${activas} ${activas === 1 ? "activa" : "activas"}` +
-    `${errores ? ` · 🔴 ${errores} con error` : ""} · ${avisos} ${avisos === 1 ? "aviso" : "avisos"} en 24 h`;
+    `${ps.length} ${ps.length === 1 ? "página" : "páginas"}: ☁️ ${nGh} en GitHub · 🖥 ${ps.length - nGh} solo web\n` +
+    `${activas} ${activas === 1 ? "activa" : "activas"}${errores ? ` · 🔴 ${errores} con error` : ""} · ${avisos} ${avisos === 1 ? "aviso" : "avisos"} en 24 h`;
   const todasPausadas = ps.length && !activas;
   return { texto, teclado: filas(
     [boton("📋 Páginas", "m:l:0"), boton("📊 Estado", "m:e")],
@@ -153,20 +156,28 @@ function inicio(ctx) {
   ) };
 }
 
-function lista(ctx, pag = 0) {
-  const ps = ctx.paginas();
-  if (!ps.length) return { texto: `<b>📋 Páginas</b>\n\nNo hay páginas. Añade una con /nueva https://…`, teclado: [[boton("➕ Añadir página", "m:n"), boton("🏠 Menú", "m:h")]] };
-  const total = Math.ceil(ps.length / POR_PAGINA);
+// filtro: "t" todas (primero las de GitHub), "g" solo GitHub, "w" solo web.
+function lista(ctx, pag = 0, filtro = "t") {
+  const todas = ctx.paginas();
+  if (!todas.length) return { texto: `<b>📋 Páginas</b>\n\nNo hay páginas. Añade una con /nueva https://…`, teclado: [[boton("➕ Añadir página", "m:n"), boton("🏠 Menú", "m:h")]] };
+  filtro = ["g", "w"].includes(filtro) ? filtro : "t";
+  const gh = todas.filter(p => p.cloud), web = todas.filter(p => !p.cloud);
+  const ps = filtro === "g" ? gh : filtro === "w" ? web : [...gh, ...web];
+  const total = Math.max(1, Math.ceil(ps.length / POR_PAGINA));
   pag = Math.min(Math.max(0, Number(pag) || 0), total - 1);
   const trozo = ps.slice(pag * POR_PAGINA, (pag + 1) * POR_PAGINA);
   const nav = [];
-  if (pag > 0) nav.push(boton("⬅️", `m:l:${pag - 1}`));
-  if (total > 1) nav.push(boton(`${pag + 1}/${total}`, `m:l:${pag}`));
-  if (pag < total - 1) nav.push(boton("➡️", `m:l:${pag + 1}`));
-  const etiqueta = p => { const n = nombre(p, ps); return n.length > 52 ? "…" + n.slice(-51) : n; };
+  if (pag > 0) nav.push(boton("⬅️", `m:l:${pag - 1}:${filtro}`));
+  if (total > 1) nav.push(boton(`${pag + 1}/${total}`, `m:l:${pag}:${filtro}`));
+  if (pag < total - 1) nav.push(boton("➡️", `m:l:${pag + 1}:${filtro}`));
+  const marca = f => filtro === f ? "✅ " : "";
+  const filtros = [boton(`${marca("t")}Todas (${todas.length})`, "m:l:0:t"), boton(`${marca("g")}☁️ GitHub (${gh.length})`, "m:l:0:g"), boton(`${marca("w")}🖥 Solo web (${web.length})`, "m:l:0:w")];
+  const etiqueta = p => { const n = nombre(p, todas); return n.length > 50 ? "…" + n.slice(-49) : n; };
+  const frec = p => p.cloud ? `☁️ ${cadaTxt(cadaGh(p))}` : `🖥 ${cadaTxt(p.interval)}`;
+  const vacia = !ps.length ? `\n\n${filtro === "g" ? "Ninguna página se vigila en GitHub Actions." : "Todas las páginas se vigilan también en GitHub Actions."}` : "\n\nElige una para ver sus ajustes:";
   return {
-    texto: `<b>📋 Páginas</b> (${ps.length})\n🟢 bien · 🔵 con aviso · 🔴 error · ⏸ en pausa\n☁️ GitHub Actions · 🖥 solo navegador\n\nElige una para ver sus ajustes:`,
-    teclado: [...trozo.map(p => [boton(`${emoji(p)} ${lugar(p)} ${etiqueta(p)}`, `m:p:${p.id}`)]), nav, [boton("🏠 Menú", "m:h")]].filter(f => f.length)
+    texto: `<b>📋 Páginas</b>\n☁️ GitHub Actions (y la web si está abierta) · 🖥 solo la web\n🟢 bien · 🔵 con aviso · 🔴 error · ⏸ en pausa${vacia}`,
+    teclado: [filtros, ...trozo.map(p => [boton(`${emoji(p)} ${etiqueta(p)} · ${frec(p)}`, `m:p:${p.id}`)]), nav, [boton("🏠 Menú", "m:h")]].filter(f => f.length)
   };
 }
 
@@ -184,27 +195,41 @@ function ficha(ctx, p) {
     esc(p.url),
     "",
     `<b>Avisa cuando:</b> ${esc(MODOS[p.watch] || p.watch)}${p.watch === "nuevo" || p.watch === "cambios" ? ` (${p.mode === "html" ? "código HTML" : "texto visible"})` : ""}`,
-    `<b>Frecuencia:</b> cada ${esc(cadaTxt(p.interval))}`,
+    p.cloud
+      ? `<b>Frecuencia:</b> 🖥 web cada ${esc(cadaTxt(p.interval))} · ☁️ GitHub cada ${esc(cadaTxt(cadaGh(p)))}${p.intervalGh ? "" : " (como la web)"}`
+      : `<b>Frecuencia:</b> 🖥 cada ${esc(cadaTxt(p.interval))} (solo la web)`,
     `<b>Estado:</b> ${estado}`,
     `<b>Último aviso:</b> ${hace(p.ultimoAviso, ahora)} · ${n24} en 24 h`,
     `<b>Filtros:</b> ${nFiltros ? `${nFiltros} propios` : "ninguno propio"}${nGlobal ? ` + ${nGlobal} globales` : ""}`,
     p.keywords.length ? `<b>Solo si contiene:</b> ${esc(p.keywords.join(", "))}` : "",
-    `<b>Dónde:</b> ${p.cloud ? "☁️ GitHub Actions" : "🖥 solo en el navegador (la comprueba la web mientras está abierta)"}`
+    `<b>Dónde:</b> ${p.cloud ? "☁️ GitHub Actions, y la web mientras está abierta" : "🖥 solo la web, mientras está abierta"}`
   ].filter(l => l !== "").join("\n");
   return { texto, teclado: filas(
-    [boton("⏱ Frecuencia", `m:f:${p.id}`), boton("🔕 Filtros", `m:fl:${p.id}`)],
-    [p.paused ? boton("▶️ Reanudar", `m:pp:${p.id}:0`) : boton("⏸ Pausar", `m:pp:${p.id}:1`), boton("📜 Últimos avisos", `m:hi:${p.id}`)],
+    p.cloud ? [boton("⏱ Web", `m:f:${p.id}`), boton("⏱ GitHub", `m:fg:${p.id}`)] : [boton("⏱ Frecuencia", `m:f:${p.id}`)],
+    [boton("🔕 Filtros", `m:fl:${p.id}`), boton("📜 Últimos avisos", `m:hi:${p.id}`)],
+    [p.paused ? boton("▶️ Reanudar", `m:pp:${p.id}:0`) : boton("⏸ Pausar", `m:pp:${p.id}:1`),
+      p.cloud ? boton("🖥 Quitar de GitHub", `m:nb:${p.id}:0`) : boton("☁️ Vigilar en GitHub", `m:nb:${p.id}:1`)],
     [boton("🗑 Quitar", `m:del:${p.id}`), boton("⬅️ Páginas", "m:l:0")]
   ) };
 }
 
-function frecuencia(ctx, p) {
-  const ops = FRECUENCIAS.map(([v, t]) => boton(`${Number(p.interval) === v ? "✅ " : ""}${t}`, `m:fs:${p.id}:${v}`));
-  const propia = !FRECUENCIAS.some(([v]) => v === Number(p.interval));
-  const nota = p.cloud ? "\n\n<i>En GitHub Actions el mínimo es 1 minuto, y solo se cumple si el reloj externo (cron-job.org) lo despierta así de a menudo. Sin él, GitHub puede tardar horas.</i>"
-    : "\n\n<i>Mínimo 10 segundos. Esta página la comprueba la web mientras está abierta.</i>";
-  return { texto: `<b>⏱ Frecuencia</b>\n${esc(nombre(p, ctx.paginas()))}\n\nAhora: cada ${esc(cadaTxt(p.interval))}. ¿Cada cuánto la compruebo?${nota}`,
-    teclado: [ops.slice(0, 3), ops.slice(3, 6), ops.slice(6), [boton(`${propia ? "✅ " : ""}✏️ Personalizada${propia ? ` (${cadaTxt(p.interval)})` : ""}`, `m:fp:${p.id}`)], [boton("⬅️ Volver", `m:p:${p.id}`)]] };
+// destino "w": la de la web (interval); "g": la de GitHub Actions (intervalGh).
+function frecuencia(ctx, p, destino = "w") {
+  const gh = destino === "g";
+  const actual = gh ? Number(p.intervalGh) || 0 : Number(p.interval);
+  const [fijar, propia] = gh ? ["fgs", "fgp"] : ["fs", "fp"];
+  const ops = FRECUENCIAS.map(([v, t]) => boton(`${actual === v ? "✅ " : ""}${t}`, `m:${fijar}:${p.id}:${v}`));
+  const esPropia = actual && !FRECUENCIAS.some(([v]) => v === actual);
+  const tec = [ops.slice(0, 3), ops.slice(3, 6), ops.slice(6),
+    [boton(`${esPropia ? "✅ " : ""}✏️ Personalizada${esPropia ? ` (${cadaTxt(actual)})` : ""}`, `m:${propia}:${p.id}`)]];
+  if (gh) tec.push([boton(`${actual ? "" : "✅ "}↩️ Igual que la web (${cadaTxt(Math.max(60, Number(p.interval) || 300))})`, `m:fgs:${p.id}:0`)]);
+  tec.push([boton("⬅️ Volver", `m:p:${p.id}`)]);
+  const ahora = gh ? `cada ${cadaTxt(cadaGh(p))}${actual ? "" : " (como la web)"}` : `cada ${cadaTxt(p.interval)}`;
+  const nota = gh
+    ? "\n\n<i>Solo cambia cada cuánto la revisa GitHub Actions; la web mantiene la suya. Mínimo 1 minuto, y solo se cumple si el reloj externo (cron-job.org) despierta a GitHub así de a menudo.</i>"
+    : p.cloud ? "\n\n<i>Solo cambia cada cuánto la revisa la web mientras está abierta; GitHub Actions tiene la suya (⏱ GitHub). Mínimo 10 segundos.</i>"
+    : "\n\n<i>Mínimo 10 segundos. Esta página la revisa la web mientras está abierta.</i>";
+  return { texto: `<b>⏱ Frecuencia ${gh ? "en GitHub Actions ☁️" : "en la web 🖥"}</b>\n${esc(nombre(p, ctx.paginas()))}\n\nAhora: ${esc(ahora)}. ¿Cada cuánto la reviso?${nota}`, teclado: tec };
 }
 
 function filtros(ctx, p) {
@@ -286,7 +311,7 @@ export async function atenderBoton(data, ctx, msgTexto = "") {
 
   switch (acc) {
     case "h": return { editar: inicio(ctx) };
-    case "l": return { editar: lista(ctx, a) };
+    case "l": return { editar: lista(ctx, a, b) };
     case "e": return { editar: estado(ctx), aviso: "Actualizado" };
     case "a": return { editar: ayuda(ctx) };
     case "g": return { editar: globales(ctx) };
@@ -295,6 +320,10 @@ export async function atenderBoton(data, ctx, msgTexto = "") {
     case "fl": return p ? { editar: filtros(ctx, p) } : falta;
     case "hi": return p ? { editar: historial(ctx, p) } : falta;
     case "fs": return p ? cambiar(a, { interval: Number(b) }, x => ficha(ctx, x)) : falta;
+    case "fg": return p ? { editar: frecuencia(ctx, p, "g") } : falta;
+    case "fgs": return p ? cambiar(a, { intervalGh: Number(b) || null }, x => ficha(ctx, x)) : falta;
+    case "fgp": return p ? (soloLectura() || { forzar: `✏️ ¿Cada cuánto la revisa GitHub Actions? ${nombre(p, ctx.paginas())}\nEscribe por ejemplo: 1 min, 10 min, 2 h o 1 día. (ref fg:${p.id})` }) : falta;
+    case "nb": return p ? cambiar(a, { cloud: b === "1" }, x => ficha(ctx, x)) : falta;
     case "fp": return p ? (soloLectura() || { forzar: `✏️ ¿Cada cuánto compruebo ${nombre(p, ctx.paginas())}?\nEscribe por ejemplo: 90 s, 10 min, 2 h o 1 día. (ref f:${p.id})` }) : falta;
     case "pp": return p ? cambiar(a, { paused: b === "1" }, x => ficha(ctx, x)) : falta;
     case "fx": return p ? cambiar(a, { ignore: p.ignore.filter(r => h6(r) !== b) }, x => filtros(ctx, x)) : falta;
@@ -334,17 +363,17 @@ export async function atenderBoton(data, ctx, msgTexto = "") {
 
 export async function atenderTexto(texto, ctx, respondeA = "") {
   texto = String(texto || "").trim();
-  const ref = String(respondeA).match(/\(ref (p:([\w-]+)|f:([\w-]+)|global|nueva)\)/);
+  const ref = String(respondeA).match(/\(ref (p:([\w-]+)|f:([\w-]+)|fg:([\w-]+)|global|nueva)\)/);
   if (ref && !texto.startsWith("/")) {
     if (ref[1] === "nueva") return pedirModo(texto);
     const bloqueo = !ctx.info().editable && { enviar: { texto: `🔒 ${esc(ctx.info().motivo || "Solo lectura")}`, teclado: [[boton("🏠 Menú", "m:h")]] } };
     if (bloqueo) return bloqueo;
-    if (ref[3]) {
-      const p = ctx.paginas().find(x => x.id === ref[3]);
+    if (ref[3] || ref[4]) {
+      const gh = !!ref[4], p = ctx.paginas().find(x => x.id === (ref[3] || ref[4]));
       if (!p) return { enviar: lista(ctx, 0) };
       const seg = leerDuracion(texto);
-      if (!seg) return { forzar: `No lo he entendido. Escribe un número y una unidad, por ejemplo: 90 s, 10 min, 2 h o 1 día. (ref f:${p.id})` };
-      const r = await ctx.cambiar(p.id, { interval: seg });
+      if (!seg) return { forzar: `No lo he entendido. Escribe un número y una unidad, por ejemplo: 90 s, 10 min, 2 h o 1 día. (ref ${gh ? "fg" : "f"}:${p.id})` };
+      const r = await ctx.cambiar(p.id, gh ? { intervalGh: seg } : { interval: seg });
       return { enviar: ficha(ctx, ctx.paginas().find(x => x.id === p.id) || p), aviso: r?.nota };
     }
     const regla = texto.split("\n").map(s => s.trim()).filter(Boolean)[0];

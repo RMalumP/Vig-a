@@ -390,7 +390,7 @@ async function atenderBoton(q, monitors, estado) {
 function vista(m, st = {}) {
   return {
     id: m.id, url: m.url, watch: m.watch || "cambios", mode: m.mode || "text",
-    interval: Number(m.interval) || 300, paused: !!m.paused, cloud: m.cloud !== false,
+    interval: Number(m.interval) || 300, intervalGh: Number(m.intervalGh) || null, paused: !!m.paused, cloud: m.cloud !== false,
     ignore: [...new Set([...lineasDe(m.ignore), ...(st.ignorarBot || [])])],
     normas: [...(m.normas || []).filter(normaValida), ...(st.normasBot || [])],
     orden: m.orden === "ignorar" || !!st.ordenBot,
@@ -417,10 +417,19 @@ function ctxBot(bot) {
       const m = cfg.monitors.find(x => x.id === id);
       if (!m) return;
       let nota = "✅ Guardado. La web lo recibirá al abrirse.";
-      if (c.interval != null) {
-        const pedido = Number(c.interval) || 300, minimo = m.cloud === false ? 10 : 60;
-        m.interval = Math.max(minimo, pedido);
-        if (pedido < minimo) nota = "✅ Guardado cada minuto: GitHub Actions no baja de ahí.";
+      // interval es la frecuencia de la web; intervalGh, la de GitHub Actions (sin ella, usa la de la web).
+      if (c.interval != null) m.interval = Math.max(10, Number(c.interval) || 300);
+      if (c.intervalGh !== undefined) {
+        if (!c.intervalGh) delete m.intervalGh;
+        else {
+          m.intervalGh = Math.max(60, Number(c.intervalGh));
+          if (Number(c.intervalGh) < 60) nota = "✅ Guardado cada minuto: GitHub Actions no baja de ahí.";
+        }
+      }
+      if (c.cloud != null) {
+        m.cloud = !!c.cloud;
+        if (m.cloud && estado[id]) estado[id].last = 0;
+        nota = m.cloud ? "☁️ GitHub Actions la revisará desde la próxima ejecución." : "🖥 GitHub Actions deja de revisarla; la web sigue.";
       }
       if (c.paused != null) { m.paused = !!c.paused; if (!m.paused && estado[id]) estado[id].last = 0; }
       if (c.ignore) m.ignore = c.ignore.join("\n");
@@ -582,7 +591,8 @@ for (const [idx, m] of monitors.entries()) {
   const st = (estado[m.id] ||= {});
   if (m.cloud === false) { resumen.push([`Página ${idx + 1}`, "solo en el navegador"]); continue; }
   if (m.paused) { resumen.push([`Página ${idx + 1}`, "en pausa"]); continue; }
-  const intervalo = Math.max(60, Number(m.interval) || 300) * 1000;
+  // La frecuencia propia de GitHub si la tiene; si no, la de la web. Nunca menos de 1 minuto.
+  const intervalo = Math.max(60, Number(m.intervalGh) || Number(m.interval) || 300) * 1000;
   if (st.last && Date.now() - st.last < intervalo - margen(intervalo)) { resumen.push([`Página ${idx + 1}`, "aún no toca"]); continue; }
   if (!enHorario(m)) { resumen.push([`Página ${idx + 1}`, "fuera de horario"]); continue; }
   st.last = Date.now();
