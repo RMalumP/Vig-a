@@ -205,3 +205,53 @@ test("repartir: GitHub Actions no repite respuestas que ya dio la web", () => {
   const r = repartir(ups, o);
   assert.deepEqual(r.mias.map(u => u.update_id), [1, 3, 4]);
 });
+
+test("leerDuracion entiende lo que escribe una persona", async () => {
+  const { leerDuracion } = await import("../bot-core.mjs");
+  assert.equal(leerDuracion("90 s"), 90);
+  assert.equal(leerDuracion("10 min"), 600);
+  assert.equal(leerDuracion("10"), 600); // sin unidad: minutos
+  assert.equal(leerDuracion("2h"), 7200);
+  assert.equal(leerDuracion("1,5 horas"), 5400);
+  assert.equal(leerDuracion("1 día"), 86400);
+  assert.equal(leerDuracion("cada rato"), null);
+  assert.equal(leerDuracion("0 min"), null);
+});
+
+test("nombre distingue entradas con la misma dirección", async () => {
+  const { nombre } = await import("../bot-core.mjs");
+  const a = { url: "https://seg-social.es/x", watch: "cambios", mode: "html", interval: 300 };
+  const b = { url: "https://seg-social.es/x", watch: "cambios", mode: "text", interval: 300 };
+  const c = { url: "https://seg-social.es/x", watch: "cambios", mode: "text", interval: 900 };
+  const d = { url: "https://otra.es/", watch: "nuevo", mode: "text", interval: 300 };
+  const todas = [a, b, c, d];
+  assert.equal(nombre(a, todas), "seg-social.es/x · Cualquier cambio · HTML");
+  assert.equal(nombre(b, todas), "seg-social.es/x · Cualquier cambio · texto · cada 5 min");
+  assert.equal(nombre(c, todas), "seg-social.es/x · Cualquier cambio · texto · cada 15 min");
+  assert.equal(nombre(d, todas), "otra.es");
+});
+
+test("frecuencia personalizada", async () => {
+  const ctx = crearCtx();
+  const f = await atenderBoton("m:f:a1", ctx);
+  assert.ok(datos(f.editar.teclado).includes("m:fp:a1"));
+  const pide = await atenderBoton("m:fp:a1", ctx);
+  assert.match(pide.forzar, /\(ref f:a1\)/);
+  const mal = await atenderTexto("a menudo", ctx, pide.forzar);
+  assert.match(mal.forzar, /No lo he entendido/);
+  const r = await atenderTexto("45 min", ctx, pide.forzar);
+  assert.equal(ctx.paginas_[0].interval, 2700);
+  assert.match(r.enviar.texto, /cada 45 min/);
+  const f2 = await atenderBoton("m:f:a1", ctx);
+  assert.match(f2.editar.teclado.flat().find(b => b.callback_data === "m:fp:a1").text, /✅ ✏️ Personalizada \(45 min\)/);
+});
+
+test("la lista muestra todas las entradas, también las repetidas", async () => {
+  const ctx = crearCtx();
+  ctx.paginas_.push({ ...ctx.paginas_[0], id: "a2", mode: "text", cloud: false });
+  const l = await atenderBoton("m:l:0", ctx);
+  const textos = l.editar.teclado.flat().map(b => b.text);
+  assert.ok(textos.some(t => /☁️ seg-social\.es\/x\?lang=es · Cualquier cambio · HTML/.test(t)), textos.join("\n"));
+  assert.ok(textos.some(t => /🖥 seg-social\.es\/x\?lang=es · Cualquier cambio · texto/.test(t)));
+  assert.match(l.editar.texto, /Páginas<\/b> \(3\)/);
+});

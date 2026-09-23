@@ -48,7 +48,10 @@ jobs:
       - name: Comprobar páginas
         run: node vigia/vigia-action.mjs
         env:
-          VIGIA_CONFIG: ${{ vars.VIGIA_CONFIG }}
+          # GitHub escribe en el registro (público en repositorios públicos) las
+          # variables de entorno de cada paso. Con VIGIA_GH_TOKEN la lista se lee
+          # por la API y no aparece; sin él, no queda más remedio que pasarla aquí.
+          VIGIA_CONFIG: ${{ secrets.VIGIA_GH_TOKEN == '' && vars.VIGIA_CONFIG || '' }}
           VIGIA_CLAVE: ${{ secrets.VIGIA_CLAVE }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

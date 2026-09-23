@@ -46,6 +46,26 @@ export function hace(t, ahora = Date.now()) {
 }
 export const cadaTxt = s => { const f = FRECUENCIAS.find(([v]) => v === Number(s)); if (f) return f[1];
   s = Number(s) || 0; return s < 60 ? `${s} s` : s < 3600 ? `${Math.round(s / 60)} min` : `${Math.round(s / 360) / 10} h`; };
+// «10 min», «90 s», «2 h», «1,5 horas», «1 día»; un número solo son minutos.
+export function leerDuracion(txt) {
+  const m = String(txt).trim().toLowerCase().match(/^(\d+(?:[.,]\d+)?)\s*(s|seg|segs?|segundos?|m|min|mins|minutos?|h|hs?|horas?|d|d[ií]as?)?\.?$/);
+  if (!m) return null;
+  const n = parseFloat(m[1].replace(",", ".")), u = (m[2] || "min")[0];
+  const s = Math.round(n * ({ s: 1, m: 60, h: 3600, d: 86400 }[u]));
+  return s > 0 ? s : null;
+}
+
+// Nombre para listas: la dirección corta y, si hay varias entradas con la misma
+// dirección, lo que las distingue (qué vigila, cómo compara, cada cuánto).
+export function nombre(p, todas = []) {
+  const base = corta(p.url);
+  const iguales = todas.filter(x => corta(x.url) === base);
+  if (iguales.length < 2) return base;
+  const rasgo = x => [MODOS[x.watch] || x.watch, x.watch === "nuevo" || x.watch === "cambios" ? (x.mode === "html" ? "HTML" : "texto") : ""].filter(Boolean).join(" · ");
+  let extra = rasgo(p);
+  if (iguales.filter(x => rasgo(x) === extra).length > 1) extra += ` · cada ${cadaTxt(p.interval)}`;
+  return `${base} · ${extra}`;
+}
 const describeNorma = n => `${n.attr} de ${n.tag === "*" ? "cualquier etiqueta" : `<${n.tag}>`}`;
 const emoji = p => p.paused ? "⏸" : p.estado === "error" ? "🔴" : p.estado === "changed" ? "🔵" : p.ultima ? "🟢" : "⚪";
 const lugar = p => p.cloud ? "☁️" : "🖥";
@@ -143,10 +163,10 @@ function lista(ctx, pag = 0) {
   if (pag > 0) nav.push(boton("⬅️", `m:l:${pag - 1}`));
   if (total > 1) nav.push(boton(`${pag + 1}/${total}`, `m:l:${pag}`));
   if (pag < total - 1) nav.push(boton("➡️", `m:l:${pag + 1}`));
-  const leyenda = ctx.info().origen === "web" ? "\n☁️ GitHub Actions · 🖥 solo navegador" : "";
+  const etiqueta = p => { const n = nombre(p, ps); return n.length > 52 ? "…" + n.slice(-51) : n; };
   return {
-    texto: `<b>📋 Páginas</b> (${ps.length})\n🟢 bien · 🔵 con aviso · 🔴 error · ⏸ en pausa${leyenda}\n\nElige una para ver sus ajustes:`,
-    teclado: [...trozo.map(p => [boton(`${emoji(p)} ${ctx.info().origen === "web" ? lugar(p) + " " : ""}${recorta(corta(p.url), 40)}`, `m:p:${p.id}`)]), nav, [boton("🏠 Menú", "m:h")]].filter(f => f.length)
+    texto: `<b>📋 Páginas</b> (${ps.length})\n🟢 bien · 🔵 con aviso · 🔴 error · ⏸ en pausa\n☁️ GitHub Actions · 🖥 solo navegador\n\nElige una para ver sus ajustes:`,
+    teclado: [...trozo.map(p => [boton(`${emoji(p)} ${lugar(p)} ${etiqueta(p)}`, `m:p:${p.id}`)]), nav, [boton("🏠 Menú", "m:h")]].filter(f => f.length)
   };
 }
 
@@ -155,11 +175,12 @@ function ficha(ctx, p) {
   const n24 = (p.hist || []).filter(h => ahora - h.t < 86400000).length;
   const nFiltros = p.ignore.length + p.normas.length + (p.orden ? 1 : 0);
   const nGlobal = g.ignore.length + g.normas.length + (g.orden ? 1 : 0);
-  const estado = p.paused ? "⏸ En pausa"
+  const estado = !p.cloud && ctx.info().origen === "actions" ? "🖥 La comprueba la web: ábrela para ver su estado"
+    : p.paused ? "⏸ En pausa"
     : p.estado === "error" ? `🔴 Error: ${esc(recorta(p.mensaje || "", 160))}`
     : `${emoji(p)} Última comprobación ${hace(p.ultima, ahora)}`;
   const texto = [
-    `<b>${esc(corta(p.url))}</b>`,
+    `<b>${esc(nombre(p, ctx.paginas()))}</b>`,
     esc(p.url),
     "",
     `<b>Avisa cuando:</b> ${esc(MODOS[p.watch] || p.watch)}${p.watch === "nuevo" || p.watch === "cambios" ? ` (${p.mode === "html" ? "código HTML" : "texto visible"})` : ""}`,
@@ -168,7 +189,7 @@ function ficha(ctx, p) {
     `<b>Último aviso:</b> ${hace(p.ultimoAviso, ahora)} · ${n24} en 24 h`,
     `<b>Filtros:</b> ${nFiltros ? `${nFiltros} propios` : "ninguno propio"}${nGlobal ? ` + ${nGlobal} globales` : ""}`,
     p.keywords.length ? `<b>Solo si contiene:</b> ${esc(p.keywords.join(", "))}` : "",
-    `<b>Dónde:</b> ${p.cloud ? "☁️ GitHub Actions" : "🖥 solo en el navegador"}`
+    `<b>Dónde:</b> ${p.cloud ? "☁️ GitHub Actions" : "🖥 solo en el navegador (la comprueba la web mientras está abierta)"}`
   ].filter(l => l !== "").join("\n");
   return { texto, teclado: filas(
     [boton("⏱ Frecuencia", `m:f:${p.id}`), boton("🔕 Filtros", `m:fl:${p.id}`)],
@@ -179,9 +200,11 @@ function ficha(ctx, p) {
 
 function frecuencia(ctx, p) {
   const ops = FRECUENCIAS.map(([v, t]) => boton(`${Number(p.interval) === v ? "✅ " : ""}${t}`, `m:fs:${p.id}:${v}`));
-  const nota = ctx.info().origen === "actions" || p.cloud ? "\n\n<i>GitHub Actions no comprueba más de una vez cada 5 minutos.</i>" : "";
-  return { texto: `<b>⏱ Frecuencia</b>\n${esc(corta(p.url))}\n\nAhora: cada ${esc(cadaTxt(p.interval))}. ¿Cada cuánto la compruebo?${nota}`,
-    teclado: [ops.slice(0, 4), ops.slice(4), [boton("⬅️ Volver", `m:p:${p.id}`)]] };
+  const propia = !FRECUENCIAS.some(([v]) => v === Number(p.interval));
+  const nota = p.cloud ? "\n\n<i>En GitHub Actions no baja de 5 minutos (y GitHub a veces tarda más).</i>"
+    : "\n\n<i>Mínimo 10 segundos. Esta página la comprueba la web mientras está abierta.</i>";
+  return { texto: `<b>⏱ Frecuencia</b>\n${esc(nombre(p, ctx.paginas()))}\n\nAhora: cada ${esc(cadaTxt(p.interval))}. ¿Cada cuánto la compruebo?${nota}`,
+    teclado: [ops.slice(0, 4), ops.slice(4), [boton(`${propia ? "✅ " : ""}✏️ Personalizada${propia ? ` (${cadaTxt(p.interval)})` : ""}`, `m:fp:${p.id}`)], [boton("⬅️ Volver", `m:p:${p.id}`)]] };
 }
 
 function filtros(ctx, p) {
@@ -272,6 +295,7 @@ export async function atenderBoton(data, ctx, msgTexto = "") {
     case "fl": return p ? { editar: filtros(ctx, p) } : falta;
     case "hi": return p ? { editar: historial(ctx, p) } : falta;
     case "fs": return p ? cambiar(a, { interval: Number(b) }, x => ficha(ctx, x)) : falta;
+    case "fp": return p ? (soloLectura() || { forzar: `✏️ ¿Cada cuánto compruebo ${nombre(p, ctx.paginas())}?\nEscribe por ejemplo: 90 s, 10 min, 2 h o 1 día. (ref f:${p.id})` }) : falta;
     case "pp": return p ? cambiar(a, { paused: b === "1" }, x => ficha(ctx, x)) : falta;
     case "fx": return p ? cambiar(a, { ignore: p.ignore.filter(r => h6(r) !== b) }, x => filtros(ctx, x)) : falta;
     case "nx": return p ? cambiar(a, { normas: p.normas.filter(n => h6(n.tag + " " + n.attr) !== b) }, x => filtros(ctx, x)) : falta;
@@ -310,11 +334,19 @@ export async function atenderBoton(data, ctx, msgTexto = "") {
 
 export async function atenderTexto(texto, ctx, respondeA = "") {
   texto = String(texto || "").trim();
-  const ref = String(respondeA).match(/\(ref (p:([\w-]+)|global|nueva)\)/);
+  const ref = String(respondeA).match(/\(ref (p:([\w-]+)|f:([\w-]+)|global|nueva)\)/);
   if (ref && !texto.startsWith("/")) {
     if (ref[1] === "nueva") return pedirModo(texto);
     const bloqueo = !ctx.info().editable && { enviar: { texto: `🔒 ${esc(ctx.info().motivo || "Solo lectura")}`, teclado: [[boton("🏠 Menú", "m:h")]] } };
     if (bloqueo) return bloqueo;
+    if (ref[3]) {
+      const p = ctx.paginas().find(x => x.id === ref[3]);
+      if (!p) return { enviar: lista(ctx, 0) };
+      const seg = leerDuracion(texto);
+      if (!seg) return { forzar: `No lo he entendido. Escribe un número y una unidad, por ejemplo: 90 s, 10 min, 2 h o 1 día. (ref f:${p.id})` };
+      const r = await ctx.cambiar(p.id, { interval: seg });
+      return { enviar: ficha(ctx, ctx.paginas().find(x => x.id === p.id) || p), aviso: r?.nota };
+    }
     const regla = texto.split("\n").map(s => s.trim()).filter(Boolean)[0];
     if (!regla || regla.length < 3) return { enviar: { texto: "Ese texto es demasiado corto: taparía demasiado. Prueba con algo más concreto.", teclado: [[boton("🏠 Menú", "m:h")]] } };
     if (ref[1] === "global") {
