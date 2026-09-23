@@ -4,6 +4,7 @@ import {
   hash, host, recorta, normTxt, lineasDe, toMin, enHorario,
   extraer, limpiarAleatorio, filtrar, palabras, coincide,
   partirEtiquetas, aplicarNormas, deducirNorma, normaValida,
+  prefijoComun, sugerirFiltro, describeNorma,
   esFeed, leerFeed, leerEnlaces, leerNumero, escTg,
   derivarClave, cifrar, descifrar
 } from "../lib.mjs";
@@ -284,4 +285,42 @@ test("derivarClave da 32 bytes y es determinista", () => {
   assert.equal(derivarClave("x").length, 32);
   assert.deepEqual(derivarClave("x"), derivarClave("x"));
   assert.equal(derivarClave(""), null);
+});
+
+/* ------------------------------------ «No avisar de cambios como este» */
+test("prefijoComun devuelve el principio compartido, recortado", () => {
+  assert.equal(prefijoComun("Visitas hoy: 120", "Visitas hoy: 121"), "Visitas hoy: 12");
+  assert.equal(prefijoComun("abc", "xyz"), "");
+});
+
+test("sugerirFiltro prefiere una norma de atributo cuando el cambio está en un valor", () => {
+  const f = sugerirFiltro({ removed: ['<link id="a1b2" rel="x">'], added: ['<link id="z9y8" rel="x">'] });
+  assert.deepEqual(f, { normas: [{ tag: "link", attr: "id" }], ignore: [] });
+  assert.match(describeNorma(f.normas[0]), /atributo id de <link>/);
+});
+
+test("sugerirFiltro no repite normas que ya existen", () => {
+  const f = sugerirFiltro({
+    removed: ['<link id="a1b2" rel="x">'], added: ['<link id="z9y8" rel="x">'],
+    normas: [{ tag: "link", attr: "id" }]
+  });
+  assert.equal(f, null);
+});
+
+test("sugerirFiltro recurre a ignorar la línea si el cambio está en el texto", () => {
+  const base = ["Titular", "Otra cosa", "Más contenido", "Actualizado a las 10:32", "Pie"];
+  const f = sugerirFiltro({ removed: ["Actualizado a las 10:31"], added: ["Actualizado a las 10:32"], base });
+  assert.deepEqual(f, { normas: [], ignore: ["Actualizado a las 10:3"] });
+});
+
+test("sugerirFiltro descarta reglas que se tragarían media página o son muy cortas", () => {
+  const base = ["Precio del producto: 10", "Precio del producto: 20", "Precio del producto: 30", "Precio del producto: 40", "Otra"];
+  assert.equal(sugerirFiltro({ removed: ["Precio del producto: 10"], added: ["Precio del producto: 90"], base }), null);
+  assert.equal(sugerirFiltro({ removed: ["Hoy 1"], added: ["Hoy 2"] }), null);
+  assert.equal(sugerirFiltro({ added: ["Solo añadido, sin pareja"] }), null);
+});
+
+test("sugerirFiltro no propone lo que ya se ignora", () => {
+  const f = sugerirFiltro({ removed: ["Actualizado a las 10:31"], added: ["Actualizado a las 10:32"], ignore: ["Actualizado a las 10:3"] });
+  assert.equal(f, null);
 });
