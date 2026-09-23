@@ -11,7 +11,7 @@
 // si por casualidad lo atienden los dos, el resultado sea el mismo.
 
 export const PREFIJO = "m"; // callback_data de los menús: «m:acción:…»
-export const ESPERA_ACTIONS = 90; // s que GitHub Actions deja a la página para responder
+export const ESPERA_ACTIONS = 30; // s que GitHub Actions deja a la página para responder (la página contesta en un segundo)
 const POR_PAGINA = 8;
 const FRECUENCIAS = [[60, "1 min"], [120, "2 min"], [300, "5 min"], [900, "15 min"], [1800, "30 min"], [3600, "1 h"], [10800, "3 h"], [21600, "6 h"], [86400, "24 h"]];
 const MODOS = { nuevo: "Información nueva", cambios: "Cualquier cambio", enlaces: "Enlaces nuevos", numero: "Un número" };

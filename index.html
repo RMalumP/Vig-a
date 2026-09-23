@@ -1387,11 +1387,12 @@ ol.steps li{margin:6px 0}
   let ultimoErrorMovil = { txt: "", t: 0 };
 
   const tgUrl = (token, metodo) => `https://api.telegram.org/bot${encodeURIComponent(token).replace(/%3A/gi, ":")}/${metodo}`;
-  async function llamarTelegram(metodo, cuerpo, token = state.settings.tg.token) {
+  async function llamarTelegram(metodo, cuerpo, token = state.settings.tg.token, { signal } = {}) {
     const res = await fetch(tgUrl(token, metodo), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(cuerpo)
+      body: JSON.stringify(cuerpo),
+      signal
     });
     const j = await res.json().catch(() => ({}));
     if (!j.ok) throw Object.assign(new Error("Telegram: " + (j.description || `error ${res.status}`)), { status: res.status });
@@ -1479,10 +1480,13 @@ ol.steps li{margin:6px 0}
   const botCore = import("./vigia/bot-core.mjs").catch(() => null);
   let comandosPuestos = false;
 
+  // Devuelve "ok", "conflicto" (otro getUpdates la cortó: GitHub Actions u otra
+  // pestaña) o "error". Con espera > 0 es long polling: Telegram no responde
+  // hasta que llega algo (o pasan esos segundos), así que el bot contesta al momento.
   let leyendoTg = false, avisadoWebhook = false;
-  async function atenderTelegramWeb() {
+  async function atenderTelegramWeb({ espera = 0 } = {}) {
     const tg = state.settings.tg;
-    if (leyendoTg || !tg.on || !tg.token || !tg.chat) return;
+    if (leyendoTg || !tg.on || !tg.token || !tg.chat) return "ok";
     leyendoTg = true;
     try {
       const core = await botCore;
@@ -1491,7 +1495,8 @@ ol.steps li{margin:6px 0}
         comandosPuestos = true;
         llamarTelegram("setMyCommands", { commands: core.COMANDOS.map(([command, description]) => ({ command, description })) }).catch(() => {});
       }
-      const updates = await llamarTelegram("getUpdates", { offset: bot.offset, timeout: 0 });
+      const updates = await llamarTelegram("getUpdates", { offset: bot.offset, timeout: espera }, tg.token,
+        { signal: AbortSignal.timeout((espera + 20) * 1000) });
       // Los botones de GitHub Actions («s»/«d») se quedan en la cola; menús y
       // mensajes los atiende la web al momento mientras esté abierta.
       const { mias, offset } = core
@@ -1507,20 +1512,35 @@ ol.steps li{margin:6px 0}
       }
       bot.atendidos = [...atendidos].slice(-300);
       if (offset != null) bot.offset = offset;
-      save();
+      if (mias.length || offset != null) save();
+      return "ok";
     } catch (err) {
-      if (err.status === 409 && !avisadoWebhook) {
-        avisadoWebhook = true;
-        toast({ kind: "error", title: "No se pueden leer los botones de Telegram", body: "Tu bot tiene un webhook activo. Quítalo con deleteWebhook si no lo usas para otra cosa." });
+      if (err.status === 409 && /webhook/i.test(err.message)) {
+        if (!avisadoWebhook) {
+          avisadoWebhook = true;
+          toast({ kind: "error", title: "No se pueden leer los botones de Telegram", body: "Tu bot tiene un webhook activo. Quítalo con deleteWebhook si no lo usas para otra cosa." });
+        }
+        return "error";
       }
+      return err.status === 409 ? "conflicto" : "error";
     } finally { leyendoTg = false; }
   }
-  setInterval(atenderTelegramWeb, 20000);
-  // Tras enviar una prueba, se mira más a menudo para que el botón responda enseguida.
-  let pruebaHasta = 0;
-  setInterval(() => { if (Date.now() < pruebaHasta) atenderTelegramWeb(); }, 3000);
-  const esperarBotonPrueba = () => { pruebaHasta = Date.now() + 120000; };
-  setTimeout(atenderTelegramWeb, 3000);
+
+  // Mientras la página está abierta (aunque sea en otra pestaña) queda siempre
+  // una pregunta en espera a Telegram, así que el bot contesta en un momento.
+  const dormir = ms => new Promise(r => setTimeout(r, ms));
+  async function escucharTelegram() {
+    let pausa = 0;
+    for (;;) {
+      const tg = state.settings.tg;
+      if (!tg.on || !tg.token || !tg.chat) { await dormir(3000); continue; }
+      const r = await atenderTelegramWeb({ espera: 25 });
+      if (r === "ok") pausa = 0;
+      else if (r === "conflicto") await dormir(800 + Math.random() * 1500); // GitHub Actions leyó a la vez: reintentar ya
+      else { pausa = Math.min(60000, (pausa || 2500) * 2); await dormir(pausa); }
+    }
+  }
+  setTimeout(escucharTelegram, 1000);
 
   async function enviarNtfy(server, topic, { titulo, lineas = [], url, silencioso }, token = state.settings.ntfy.token) {
     const click = lineas.length === 1 && lineas[0].href ? lineas[0].href : url;
@@ -2112,7 +2132,6 @@ ol.steps li{margin:6px 0}
         titulo: "Vigía: mensaje de prueba", lineas: [{ text: "Los avisos por Telegram funcionan." }], url: location.href.split("#")[0],
         botones: BOTON_PRUEBA
       });
-      esperarBotonPrueba();
       const lee = S.tg.on && S.tg.token && S.tg.chat;
       toast({ title: "Prueba enviada", body: lee
         ? "Revisa Telegram y pulsa el botón del mensaje: con esta página abierta, te contestará en unos segundos."
@@ -2185,7 +2204,6 @@ ol.steps li{margin:6px 0}
     }
     const moviles = (S.tg.on && S.tg.token && S.tg.chat) || (S.ntfy.on && S.ntfy.topic);
     if (moviles) enviarMovil({ titulo: "Vigía: aviso de prueba", lineas: [{ text: "Nueva convocatoria publicada" }], url: location.href.split("#")[0], botones: BOTON_PRUEBA });
-    if (S.tg.on && S.tg.token && S.tg.chat) esperarBotonPrueba();
   };
 
   /* =====================================================================
